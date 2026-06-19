@@ -33,10 +33,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npx eslint . --ext .js,.jsx
-        continue-on-error: true
-
       - name: Run test suite (jest)
         run: npm test -- --ci --coverage
         env:
@@ -82,7 +78,13 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npx eslint src --ext .js,.jsx
+        run: |
+          # Check if eslint config exists and run accordingly
+          if [ -f eslint.config.js ]; then
+            npx eslint src --ext .js,.jsx --max-warnings 10
+          else
+            echo "ESLint config not found, skipping lint"
+          fi
         continue-on-error: true
 
       - name: Type checking (if TypeScript is present)

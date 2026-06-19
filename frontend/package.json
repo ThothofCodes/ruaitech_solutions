@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "Ruai Tech Solutions — Integrated Platform UI",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:smoke": "node ../__simulation__.js",
+    "test:ui": "vitest --ui",
     "build:debug": "VITE_DEBUG=true vite build"
   },
   "engines": {
@@ -24,12 +26,19 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@babel/preset-react": "^8.0.1",
+    "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^4.1.9",
     "eslint": "^9.18.0",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
     "jsdom": "^25.0.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.9"
@@ -38,4 +47,3 @@
   "license": "MIT",
   "proxy": "http://localhost:5001"
 }
-
