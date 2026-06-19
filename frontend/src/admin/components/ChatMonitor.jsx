@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../../hooks/useChat';
-import { api } from '../../utils/api';
 
 const ChatMonitor = ({ authToken, onClose }) => {
   const {
@@ -14,52 +13,19 @@ const ChatMonitor = ({ authToken, onClose }) => {
     getMessagesForConversation,
     sendMessage,
     setCurrentConversation,
-    getActiveConversations,
-    setAdminOnlineStatus
+    getActiveConversations
   } = useChat({ authToken });
+
 
   const [newMessage, setNewMessage] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
-  const [adminAvailability, setAdminAvailability] = useState(true);
   const messagesEndRef = useRef(null);
 
-  // Initialize admin availability status on mount
-  useEffect(() => {
-    const initializeAdminStatus = async () => {
-      try {
-        const response = await api.get('/chat/admin/status');
-        setAdminAvailability(response.data.status);
-      } catch (error) {
-        console.error('Error fetching admin status:', error);
-        // Default to true if there's an error
-        setAdminAvailability(true);
-      }
-    };
-    
-    initializeAdminStatus();
-  }, []);
-
-  // Toggle admin availability status
-  const toggleAdminAvailability = async () => {
-    try {
-      const response = await api.post('/chat/admin/status', {
-        status: !adminAvailability
-      });
-      
-      setAdminAvailability(response.data.status);
-      // Update the admin online status in the chat hook
-      setAdminOnlineStatus(response.data.status);
-      
-      alert(response.data.message);
-    } catch (error) {
-      console.error('Error updating admin availability:', error);
-      alert('Failed to update admin availability status');
-    }
-  };
 
   // Auto-scroll to bottom when messages change
+
   useEffect(() => {
     try {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -154,18 +120,19 @@ const ChatMonitor = ({ authToken, onClose }) => {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <span style={{ fontSize: '0.8rem', color: '#b8a8d8' }}>Availability:</span>
           <button
-            onClick={toggleAdminAvailability}
+            type="button"
+            onClick={() => {}}
             style={{
               padding: '0.25rem 0.75rem',
-              background: adminAvailability ? 'rgba(0,255,136,0.2)' : 'rgba(255,170,0,0.2)',
-              color: adminAvailability ? '#00ff88' : '#ffaa00',
+              background: adminOnline ? 'rgba(0,255,136,0.2)' : 'rgba(255,170,0,0.2)',
+              color: adminOnline ? '#00ff88' : '#ffaa00',
               border: '1px solid rgba(240,238,255,0.2)',
               borderRadius: '4px',
-              cursor: 'pointer',
+              cursor: 'default',
               fontSize: '0.8rem'
             }}
           >
-            {adminAvailability ? 'ONLINE' : 'OFFLINE'}
+            {adminOnline ? 'ONLINE' : 'OFFLINE'}
           </button>
           <button
             onClick={() => setMonitoringEnabled(!monitoringEnabled)}

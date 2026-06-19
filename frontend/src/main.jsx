@@ -5,5 +5,8 @@ import './theme.css';
 import './index.css';
 import App from './App.jsx';
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<div />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  React.createElement(React.StrictMode, null, React.createElement(App))
+);
+
+

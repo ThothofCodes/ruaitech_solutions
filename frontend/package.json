@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:smoke": "node ../__simulation__.js"
+    "test:smoke": "node ../__simulation__.js",
+    "build:debug": "VITE_DEBUG=true vite build"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -37,3 +38,4 @@
   "license": "MIT",
   "proxy": "http://localhost:5001"
 }
+

@@ -9,18 +9,11 @@ const { presenceManager } = require('../socket/presence.manager');
 // Public routes
 router.post('/callback', chatController.createCallbackRequest);
 
-// Public endpoint to check admin status without authentication - hardened version
-router.get('/status', (req, res) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.json({
-    adminOnline: presenceManager.isAnyAdminOnline(),
-    adminCount: presenceManager.onlineAdminCount(),
-    timestamp: new Date().toISOString()
-  });
-});
+// Public endpoint(s) removed: presence is delivered via Socket.IO events only.
 
 // Protected routes for admins
 router.use(protect); // This ensures user is authenticated
+
 
 // Admin routes for chat
 router.get('/conversations', chatController.getAllConversations);
@@ -31,8 +24,7 @@ router.patch('/conversation/:conversationId/read', chatController.markAsRead);
 router.get('/callbacks', chatController.getCallbackRequests);
 router.patch('/callbacks/:id', chatController.updateCallbackRequest);
 
-// Admin status routes
-router.get('/admin/status', chatController.getAdminStatus);
-router.post('/admin/status', chatController.updateAdminStatus);
+// Admin status routes removed: presence is delivered via Socket.IO events only.
+
 
 module.exports = router;

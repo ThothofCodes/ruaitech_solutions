@@ -18,7 +18,9 @@
 8. [Department URLs](#8-department-urls)
 9. [Environment Variables Reference](#9-environment-variables-reference)
 10. [Production Build](#10-production-build)
-11. [Troubleshooting](#11-troubleshooting)
+11. [CI/CD Pipeline](#11-cicd-pipeline)
+12. [Deployment](#12-deployment)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -100,201 +102,242 @@ SEED_SUPER_ADMIN_PASSWORD=<strong-unique-password>
 SEED_ADMIN_PASSWORD=<strong-unique-password>
 ```
 
-### Frontend
-
-The frontend `.env` is optional in development (the proxy handles API routing automatically).
-
-For production only:
-
-```bash
-cd frontend
-# Edit .env and set your production API URL
-VITE_API_URL=https://<your-production-domain>/api
-```
-
 ---
 
 ## 4. Database Setup
 
-### Option A — MongoDB Atlas (recommended for Nairobi)
+1. **MongoDB Atlas** (recommended for production):
+   - Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/atlas/database)
+   - Navigate to Database Access → Add New Database User
+   - Create a user with `Read and Write to Any Database` privilege
+   - Navigate to Network Access → Add IP Address → Allow Access from Anywhere (0.0.0.0/0)
+   - Copy the connection string and replace `<username>`, `<password>`, and `<cluster>` with your credentials
 
-1. Create a free cluster at [cloud.mongodb.com](https://cloud.mongodb.com)
-2. Create a database user with read/write access
-3. Whitelist your IP (or use `0.0.0.0/0` for development)
-4. Copy the connection string into `MONGO_URI` in your `.env`
-
-### Option B — Local MongoDB
-
-```bash
-# Start local MongoDB
-mongod --dbpath /var/data/db
-
-# Connection string in .env:
-MONGO_URI=mongodb://127.0.0.1:27017/ruaitech
-```
+2. **Local MongoDB** (for development only):
+   - Install MongoDB Community Edition
+   - Start the MongoDB service: `sudo systemctl start mongod`
+   - Verify it's running: `sudo systemctl status mongod`
 
 ---
 
 ## 5. Seed the Database
 
-> **Run this once** on a fresh database. It creates the Super Admin account, department records, pricing rules, and service catalogue.
+⚠️ **Important**: Only run the seed script once after the first installation.
 
 ```bash
-cd backend
-node seed.js
+# From the project root
+npm run seed
+
+# Or from the backend directory
+cd backend && npm run seed
 ```
 
-**Expected output:**
+This creates:
+- Super Admin account (email: `codeofthoth@outlook.com`)
+- Admin accounts for each department
+- Sample data for testing
 
-```
-✅ Connected to MongoDB
-✅ Super Admin created  — codeofthoth@outlook.com
-✅ Department heads created (6 departments)
-✅ Departments seeded
-✅ Pricing rules seeded
-✅ Services seeded
-✅ Database seeded successfully
-   Super Admin Email:    codeofthoth@outlook.com
-   Super Admin Password: (the value you set in SEED_SUPER_ADMIN_PASSWORD)
-```
-
-> After seeding, you may remove `SEED_SUPER_ADMIN_PASSWORD` and `SEED_ADMIN_PASSWORD` from your `.env` for security.
+After seeding, **remove** the `SEED_*` variables from your `.env` file.
 
 ---
 
 ## 6. Boot the Application
 
-### Development (both services together)
+### Development Mode
 
 ```bash
-# From the project root
+# From the project root — boots both backend and frontend with hot reload
 npm run dev
 ```
 
-This starts:
-- **Backend API** on `http://localhost:5001` (with nodemon auto-reload)
-- **Frontend** on `http://localhost:3000` (Vite HMR — hot module replacement)
-- **Socket.io** on the same port as the backend (`5001`)
-- **Vite proxy** forwards `/api` and `/socket.io` requests to `localhost:5001` automatically
+This command uses `concurrently` to run:
+- Backend server on `http://localhost:5001`
+- Frontend dev server on `http://localhost:3000`
 
-### Start services separately
+### Production Mode
 
 ```bash
-# Terminal 1 — Backend
-npm run start:backend
-# or: cd backend && npm run dev
+# Terminal 1 — start backend
+cd backend && npm start
 
-# Terminal 2 — Frontend
-npm run start:frontend
-# or: cd frontend && npm start
+# Terminal 2 — build and serve frontend
+cd frontend && npm run build
+npx serve -s dist
 ```
 
 ---
 
 ## 7. Access the Platform
 
-| Portal | URL | Who |
-|--------|-----|-----|
-| **Super Admin Dashboard** | `http://localhost:3000/admin/super` | Thoth of Codes only |
-| **Login Page** | `http://localhost:3000/login` | All admin users |
-| **Public Store** | `http://localhost:3000` | Unauthenticated visitors |
+| Role | URL | Credentials |
+|------|-----|-------------|
+| **Public** | `http://localhost:3000` | Browse freely |
+| **Super Admin** | `http://localhost:3000/admin/super` | Email: `codeofthoth@outlook.com` |
+| **Admin Portal** | `http://localhost:3000/admin` | Department-specific access |
+| **Staff Portal** | `http://localhost:3000/staff` | Company email-based access |
 
-**First login:**
-
-```
-Email:    codeofthoth@outlook.com
-Password: (your SEED_SUPER_ADMIN_PASSWORD value)
-```
+> **Note**: Default passwords for seeded accounts are the same as emails. Change them immediately after first login.
 
 ---
 
 ## 8. Department URLs
 
-Each department has its own admin panel. Log in as the respective department head:
+Each department has its dedicated admin panel:
 
-| Department | Admin Panel URL |
-|------------|----------------|
-| Internet Distribution | `/admin/internet` |
-| Web Development | `/admin/webdev` |
-| PlayStation Arena | `/admin/playstation` |
-| Hardware Repair | `/admin/repair` |
-| Cybersecurity | `/admin/cybersecurity` |
-| Gov Admin Assistance | `/admin/govadmin` |
-
-**Staff portals** (login with company email `firstname.dept@ruaitechsolutions.co.ke`):
-
-```
-/staff/<dept-slug>/dashboard
-```
-
-**Client portals** (OTP login via SMS):
-
-```
-/client/<dept-slug>
-```
+| Department | URL |
+|------------|-----|
+| **Finance** | `http://localhost:3000/admin/finance` |
+| **Inventory** | `http://localhost:3000/admin/inventory` |
+| **CRM** | `http://localhost:3000/admin/crm` |
+| **Booking** | `http://localhost:3000/admin/booking` |
+| **Consultation** | `http://localhost:3000/admin/consultation` |
+| **Service** | `http://localhost:3000/admin/service` |
+| **Ticketing** | `http://localhost:3000/admin/tickets` |
+| **Analytics** | `http://localhost:3000/admin/analytics` |
 
 ---
 
 ## 9. Environment Variables Reference
 
-### Backend (`backend/.env`)
+Complete `.env` template for `backend/.env`:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NODE_ENV` | ✅ | `development` or `production` |
-| `PORT` | ✅ | API server port (default `5001`) |
-| `MONGO_URI` | ✅ | Full MongoDB connection string |
-| `JWT_SECRET` | ✅ | Min 32-char secret for signing tokens |
-| `JWT_EXPIRE` | ✅ | Token lifetime e.g. `8h` |
-| `SUPER_ADMIN_EMAIL` | ✅ | Identity-locked Super Admin email |
-| `CLIENT_URL` | ✅ | Frontend origin for CORS e.g. `http://localhost:3000` |
-| `MPESA_CONSUMER_KEY` | ✅ | Safaricom Daraja consumer key |
-| `MPESA_CONSUMER_SECRET` | ✅ | Safaricom Daraja consumer secret |
-| `MPESA_SHORTCODE` | ✅ | Business till/paybill number |
-| `MPESA_PASSKEY` | ✅ | Safaricom passkey |
-| `MPESA_CALLBACK_URL` | ✅ | Public HTTPS URL Safaricom calls |
-| `AT_USERNAME` | ✅ | Africa's Talking username (`sandbox` for testing) |
-| `AT_API_KEY` | ✅ | Africa's Talking API key |
-| `CLOUDINARY_CLOUD_NAME` | ✅ | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | ✅ | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | ✅ | Cloudinary API secret |
-| `EMAIL_HOST` | ✅ | SMTP host e.g. `smtp.gmail.com` |
-| `EMAIL_PORT` | ✅ | SMTP port e.g. `587` |
-| `EMAIL_USER` | ✅ | Sender email address |
-| `EMAIL_PASS` | ✅ | Gmail App Password or SMTP password |
-| `SEED_SUPER_ADMIN_PASSWORD` | Seed only | Used by `node seed.js` once |
-| `SEED_ADMIN_PASSWORD` | Seed only | Used by `node seed.js` once |
+```env
+# Database
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/ruaitech
+MONGO_LOCAL=mongodb://localhost:27017/ruaitech  # fallback for local dev
 
-### Frontend (`frontend/.env`)
+# Authentication
+JWT_SECRET=<32-char-random-string>
+JWT_EXPIRE=30d
+SUPER_ADMIN_EMAIL=codeofthoth@outlook.com
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_API_URL` | Production only | Full API base URL. Leave blank in development (Vite proxy handles it). |
+# M-Pesa Daraja API
+MPESA_ENV=sandbox                    # 'sandbox' or 'production'
+MPESA_CONSUMER_KEY=<your_consumer_key>
+MPESA_CONSUMER_SECRET=<your_consumer_secret>
+MPESA_SHORTCODE=<your_shortcode>
+MPESA_PASSKEY=<your_passkey>
+MPESA_CALLBACK_URL=https://<your-domain>/api/billing/mpesa-callback
+MPESA_INITIATOR_USERNAME=<initiator_username>
+MPESA_INITIATOR_SECURITY_CREDENTIAL=<security_credential>
+
+# Africa's Talking
+AT_USERNAME=sandbox                 # 'sandbox' for testing
+AT_API_KEY=<your_api_key>
+AT_SHORTCODE=<short_code>
+AT_PURCHASE_KEY=<purchase_key>
+
+# Email (SendGrid recommended)
+SENDGRID_API_KEY=<your_sendgrid_key>
+EMAIL_FROM=noreply@ruaitech.co.ke
+
+# Cloudinary (file uploads)
+CLOUDINARY_CLOUD_NAME=<cloud_name>
+CLOUDINARY_API_KEY=<api_key>
+CLOUDINARY_API_SECRET=<api_secret>
+
+# Server
+PORT=5001
+NODE_ENV=development                # 'development', 'production', or 'test'
+CLIENT_URL=http://localhost:3000    # frontend URL for CORS
+SERVER_URL=http://localhost:5001    # backend URL for API calls
+
+# Seed script passwords (REMOVE after seeding)
+SEED_SUPER_ADMIN_PASSWORD=<password>
+SEED_ADMIN_PASSWORD=<password>
+```
 
 ---
 
 ## 10. Production Build
 
+### Frontend Build
+
 ```bash
-# 1. Build the React frontend (Vite — fast production build)
-npm run build:frontend
-# Output: frontend/build/   (7 optimised chunks, ~255 kB gzipped total)
-
-# 2. Serve the build folder from your backend (or a CDN)
-#    In backend/server.js, static files are served from frontend/build/
-#    in production mode automatically.
-
-# 3. Set NODE_ENV=production in your backend .env
-
-# 4. Start the backend
-npm run start:backend
+cd frontend
+npm run build
 ```
 
-> For PythonAnywhere deployment, upload the `backend/` directory and point the WSGI config to `server.js` via a Node.js task runner.
+### Backend Build
+
+Node.js applications don't require compilation, but ensure all production dependencies are installed:
+
+```bash
+cd backend
+npm ci --only=production
+```
+
+### Docker Build
+
+The project includes Docker support for containerized deployment:
+
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
+```
 
 ---
 
-## 11. Troubleshooting
+## 11. CI/CD Pipeline
+
+The project includes a comprehensive CI/CD pipeline using GitHub Actions:
+
+### CI (Continuous Integration)
+- Runs on every push and pull request to `main` and `develop` branches
+- Includes:
+  - Backend: Linting, testing, security audits, syntax validation
+  - Frontend: Linting, testing, building, security audits
+  - End-to-end simulation smoke tests
+  - Security scanning with Trivy
+  - Code quality checks
+
+### CD (Continuous Deployment)
+- Runs on every push to `main` branch
+- Supports multiple deployment targets:
+  - PythonAnywhere (primary backend)
+  - Vercel (frontend)
+  - Heroku (alternative backend)
+  - Docker Hub (container images)
+
+### Configuration
+- Located in `.github/workflows/`
+- Requires secrets to be configured in GitHub repository settings
+- See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup instructions
+
+---
+
+## 12. Deployment
+
+The application can be deployed to various platforms:
+
+### PythonAnywhere
+> Recommended for backend deployment
+- Backend runs as a Node.js application
+- Uses the PythonAnywhere API to reload the application
+- Supports both free and paid plans
+
+### Vercel
+> Recommended for frontend deployment
+- Frontend deployed as a static site
+- Automatic SSL certificate
+- Global CDN distribution
+
+### Heroku
+> Alternative backend deployment
+- Platform-as-a-Service solution
+- Easy scaling and monitoring
+
+### Docker
+> Containerized deployment
+- Multi-platform support
+- Consistent environments
+- Easy scaling
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+---
+
+## 13. Troubleshooting
 
 ### `npm install` fails
 
@@ -366,6 +409,10 @@ ruaitech_solutions/
 │       ├── hooks/       # useSocket, custom hooks
 │       ├── pages/       # Public + staff + client portals
 │       └── utils/       # api.js axios instance
+├── .github/
+│   └── workflows/       # CI/CD pipelines
+├── docker-compose.yml   # Docker configuration
+├── DEPLOYMENT.md        # Deployment guide
 ├── package.json         # Root scripts (npm run dev)
 └── README.md            # This file
 ```

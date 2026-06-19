@@ -28,34 +28,80 @@ on:
   push:
     branches: [main]
   workflow_dispatch: {} # allows manually triggering a reload from the Actions tab
+  release:
+    types: [published] # trigger on releases
+
+env:
+  NODE_VERSION: '20.x'
 
 jobs:
   check-secrets:
     name: Check deploy secrets are configured
     runs-on: ubuntu-latest
     outputs:
-      configured: ${{ steps.check.outputs.configured }}
+      pythonanywhere_configured: ${{ steps.pa_check.outputs.configured }}
+      vercel_token_exists: ${{ steps.vercel_check.outputs.exists }}
+      heroku_token_exists: ${{ steps.heroku_check.outputs.exists }}
     steps:
-      - id: check
+      - id: pa_check
         run: |
           if [ -n "${{ secrets.PYTHONANYWHERE_API_TOKEN }}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::PYTHONANYWHERE_API_TOKEN is not set — skipping deploy. This is expected until you add it under repo Settings → Secrets."
+            echo "::notice::PYTHONANYWHERE_API_TOKEN is not set — skipping PythonAnywhere deploy. This is expected until you add it under repo Settings → Secrets."
           fi
 
-  deploy:
-    name: Reload PythonAnywhere web app
-    needs: check-secrets
-    if: needs.check-secrets.outputs.configured == 'true'
+      - id: vercel_check
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: heroku_check
+        run: |
+          if [ -n "${{ secrets.HEROKU_API_KEY }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-pythonanywhere:
+    name: Deploy to PythonAnywhere
+    needs: [check-secrets]
+    if: needs.check-secrets.outputs.pythonanywhere_configured == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      # TODO (manual setup required — see header comment): sync the new
-      # commit's code onto the PythonAnywhere filesystem here, e.g. via the
-      # consoles API if you're on the free plan, or `rsync`/`git pull` over
-      # SSH if you're on a paid plan. Reloading without this step restarts
-      # the app with whatever code is already there, not what's in this push.
+      # Sync code to PythonAnywhere (implementation depends on account type)
+      # For paid accounts with SSH access:
+      - name: Configure SSH for PythonAnywhere (paid plan)
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PYTHONANYWHERE_SSH_PRIVATE_KEY }}
+        if: ${{ secrets.PYTHONANYWHERE_SSH_PRIVATE_KEY != '' }}
+
+      - name: Sync code to PythonAnywhere via rsync (paid plan)
+        run: |
+          rsync -avz --exclude='.git' --exclude='node_modules' ./backend/ ${{ secrets.PYTHONANYWHERE_USERNAME }}@${{ secrets.PYTHONANYWHERE_DOMAIN }}:/home/${{ secrets.PYTHONANYWHERE_USERNAME }}/ruaitech_backend/
+        if: ${{ secrets.PYTHONANYWHERE_SSH_PRIVATE_KEY != '' }}
+        continue-on-error: true
+
+      # Alternative for free accounts - use console API to git pull
+      - name: Update code via PythonAnywhere Console API (free plan)
+        run: |
+          CONSOLE_ID="${{ secrets.PYTHONANYWHERE_CONSOLE_ID }}"
+          if [ -n "$CONSOLE_ID" ]; then
+            curl -X POST \
+              "https://${{ secrets.PYTHONANYWHERE_HOST }}/api/v0/user/${{ secrets.PYTHONANYWHERE_USERNAME }}/consoles/$CONSOLE_ID/send_input/" \
+              -H "Authorization: Token ${{ secrets.PYTHONANYWHERE_API_TOKEN }}" \
+              -d "input=cd ~/ruaitech_backend && git pull origin main\n"
+          else
+            echo "::warning::PYTHONANYWHERE_CONSOLE_ID not set. Code sync skipped. Manual sync required."
+          fi
+        continue-on-error: true
 
       - name: Reload web app via PythonAnywhere API
         run: |
@@ -68,3 +114,125 @@ jobs:
             echo "::error::Reload failed with status $response"
             exit 1
           fi
+
+  deploy-frontend-vercel:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_PROJECT_ID != '' && secrets.VERCEL_ORG_ID != '' }}
+    environment: production
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env.production for Vercel deployment
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
+          
+      - name: Deploy to Vercel
+        run: |
+          npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+  deploy-backend-heroku:
+    name: Deploy backend to Heroku
+    runs-on: ubuntu-latest
+    if: ${{ secrets.HEROKU_API_KEY != '' && secrets.HEROKU_APP_NAME != '' }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+          appdir: "backend"
+          rollbackonhealthcheckfailure: true
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SUPER_ADMIN_EMAIL: ${{ secrets.SUPER_ADMIN_EMAIL }}
+          MPESA_CONSUMER_KEY: ${{ secrets.MPESA_CONSUMER_KEY }}
+          MPESA_CONSUMER_SECRET: ${{ secrets.MPESA_CONSUMER_SECRET }}
+          MPESA_SHORTCODE: ${{ secrets.MPESA_SHORTCODE }}
+          MPESA_PASSKEY: ${{ secrets.MPESA_PASSKEY }}
+          AT_USERNAME: ${{ secrets.AT_USERNAME }}
+          AT_API_KEY: ${{ secrets.AT_API_KEY }}
+          CLIENT_URL: ${{ secrets.CLIENT_URL }}
+
+  deploy-docker-hub:
+    name: Build and push Docker image to Docker Hub
+    runs-on: ubuntu-latest
+    if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/ruaitech-backend:${{ github.sha }},${{ secrets.DOCKERHUB_USERNAME }}/ruaitech-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/ruaitech-frontend:${{ github.sha }},${{ secrets.DOCKERHUB_USERNAME }}/ruaitech-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  notify-deployment:
+    name: Notify deployment completion
+    runs-on: ubuntu-latest
+    needs: [deploy-pythonanywhere, deploy-frontend-vercel, deploy-backend-heroku, deploy-docker-hub]
+    if: always()
+    steps:
+      - name: Send deployment notification
+        run: |
+          echo "Deployment completed. Jobs that ran:"
+          echo "PythonAnywhere: ${{ needs.deploy-pythonanywhere.result }}"
+          echo "Vercel: ${{ needs.deploy-frontend-vercel.result }}"
+          echo "Heroku: ${{ needs.deploy-backend-heroku.result }}"
+          echo "Docker: ${{ needs.deploy-docker-hub.result }}"

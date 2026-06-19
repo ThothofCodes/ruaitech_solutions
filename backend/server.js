@@ -167,6 +167,8 @@ app.use('/api/dept',          require('./routes/deptModules'));
 app.use('/api/track',         require('./routes/track')); // Phase 9 market research — public repair status tracker, no auth
 app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/tickets',       require('./routes/tickets'));
+app.use('/api/tickets',       require('./routes/publicTicketsTrack')); 
+
 app.use('/api/staff-portal',  require('./routes/staffPortal'));
 app.use('/api/inventory',     require('./routes/inventory'));
 app.use('/api/billing',       require('./routes/billing'));

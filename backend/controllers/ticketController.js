@@ -2,7 +2,8 @@ const { emitTicketReply } = require('../socket');
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const mongoose = require('mongoose');
 const Ticket   = require('../models/Ticket');
-const { sendSMS } = require('../config/africastalking');
+const { notifyCustomer } = require('../config/africastalking');
+
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 const safePage  = (p) => Math.max(1, Math.min(Number(p) || 1, 1000));
@@ -95,14 +96,72 @@ exports.updateStatus = async (req, res, next) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
     const VALID = ['OPEN','IN_PROGRESS','AWAITING_CLIENT','RESOLVED','CLOSED','REOPENED'];
     if (!VALID.includes(req.body.status)) return res.status(400).json({ message: 'Invalid status' });
+
+    const previousTicket = await Ticket.findById(req.params.id).select('status');
     const update = { status: req.body.status };
     if (req.body.status === 'RESOLVED') update.resolvedAt = new Date();
     if (req.body.status === 'CLOSED')   update.closedAt   = new Date();
+
     const ticket = await Ticket.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+
+    // Phase 9 market research, Tier 1 #1: auto-SMS on status changes.
+    // Ticket model does not currently store client phone directly, so we
+    // attempt to resolve it from the raisedBy user.
+    if (previousTicket?.status !== req.body.status) {
+      try {
+        const User = require('../models/User');
+        const client = await User.findById(ticket.raisedBy).select('phone');
+        const phone = client?.phone;
+        if (phone) {
+          const messages = {
+            OPEN: 'Your support ticket is received. We will update you shortly.',
+            IN_PROGRESS: 'Your support ticket is now being handled. We will update you when there is progress.',
+            AWAITING_CLIENT: 'We are waiting for your response to continue handling your ticket. Please check in with Ruai Tech Solutions.',
+            RESOLVED: 'Your support ticket has been resolved. Thank you for your patience.',
+            CLOSED: 'Your support ticket is now closed. If you need further help, please contact us again.',
+            REOPENED: 'Your support ticket has been reopened. We will continue working on it.',
+          };
+
+          const msg = messages[ticket.status] || `Update on your ticket: ${ticket.status}`;
+          await notifyCustomer(phone, msg, ticket.notifyChannel || 'sms');
+        }
+      } catch (_) {
+        // best-effort notification only
+      }
+    }
+
     res.json(ticket);
   } catch (err) { next(err); }
 };
+
+// Public, unauthenticated ticket tracker (Tier 1 #1)
+exports.trackTicket = async (req, res, next) => {
+  try {
+    const referenceNumber = String(req.body?.referenceNumber || '').trim().toUpperCase();
+    if (!referenceNumber) return res.status(400).json({ message: 'referenceNumber is required' });
+
+    const ticket = await Ticket.findOne({ ticketId: referenceNumber }).select(
+      'ticketId title status departmentSlug createdAt updatedAt resolvedAt closedAt satisfactionScore priority'
+    );
+
+    if (!ticket) return res.status(404).json({ message: 'No ticket found with that reference number' });
+
+    res.json({ ticket: {
+      ticketId: ticket.ticketId,
+      title: ticket.title,
+      status: ticket.status,
+      departmentSlug: ticket.departmentSlug,
+      priority: ticket.priority,
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
+      resolvedAt: ticket.resolvedAt,
+      closedAt: ticket.closedAt,
+      satisfactionScore: ticket.satisfactionScore,
+    }});
+  } catch (err) { next(err); }
+};
+
 
 exports.escalateTicket = async (req, res, next) => {
   try {

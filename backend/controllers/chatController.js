@@ -205,68 +205,7 @@ const chatController = {
     }
   },
 
-  // Get admin status
-  getAdminStatus: async (req, res) => {
-    try {
-      const userId = req.user.id;
-      
-      // Get the specific admin's availability setting
-      const adminAvailability = presenceManager.getAdminAvailability(userId);
-      
-      // Get overall system admin online status
-      const systemAdminOnline = presenceManager.isAnyAdminOnline();
-      
-      res.json({
-        success: true,
-        status: adminAvailability, // This admin's willingness to receive chats
-        adminOnline: systemAdminOnline, // Overall system availability
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error getting admin status:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get admin status'
-      });
-    }
-  },
-
-  // Update admin status - This controls whether an admin is willing to receive chats
-  updateAdminStatus: async (req, res) => {
-    try {
-      const { status } = req.body;
-      const userId = req.user.id;
-      
-      if (typeof status !== 'boolean') {
-        return res.status(400).json({
-          success: false,
-          error: 'Status must be a boolean value'
-        });
-      }
-
-      // Update this admin's availability preference
-      presenceManager.setAdminAvailability(userId, status);
-      
-      // Broadcast the updated admin status to all visitors
-      const io = getIO();
-      io.to('public-chat').emit('admin:status', { online: presenceManager.isAnyAdminOnline() });
-
-      res.json({
-        success: true,
-        message: status 
-          ? 'You are now available to receive customer chats' 
-          : 'You are no longer available to receive customer chats',
-        status: status,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating admin status:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update admin status'
-      });
-    }
-  }
 };
+
 
 module.exports = chatController;

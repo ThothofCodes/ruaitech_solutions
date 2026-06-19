@@ -27,19 +27,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint . --ext .js,.jsx
+        continue-on-error: true
 
       - name: Run test suite (jest)
-        run: npm test -- --ci
+        run: npm test -- --ci --coverage
         env:
           JWT_SECRET: ci-test-secret-not-for-production
           NODE_ENV: test
+          MONGO_URI: mongodb://localhost:27017/ruaitech_ci_test
 
-      - name: Dependency audit (high/critical only)
-        run: npm audit --audit-level=high
-        continue-on-error: true # report, don't block — see Part Seven of the audit for the remediation backlog
+      - name: Security audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for vulnerabilities
+        run: |
+          npm audit --audit-level=high --json > audit-results.json || true
+          if [ -s audit-results.json ] && ! jq -r '.metadata.vulnerabilities.high // 0' audit-results.json | grep -q '^0$'; then
+            echo "High severity vulnerabilities detected:"
+            jq -r '.actions[]? | .resolves[]? | "Package: \(.module), Vuln: \(.id)"' audit-results.json || true
+          fi
 
       - name: Confirm server.js parses cleanly
         run: node -c server.js
@@ -60,26 +75,53 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npx eslint src --ext .js,.jsx
-        continue-on-error: true # the project has no eslint config committed yet — see CHANGELOG_PHASE9.md follow-ups
+        continue-on-error: true
+
+      - name: Type checking (if TypeScript is present)
+        run: npx tsc --noEmit
+        continue-on-error: true
 
       - name: Run component tests (vitest)
-        run: npm test
-        continue-on-error: true # first test runner wired up this phase; suite is intentionally still thin
+        run: npm test -- --ci --coverage
+        continue-on-error: true
 
       - name: Production build
         run: npm run build
         env:
           VITE_API_URL: https://api.placeholder.invalid # build-time only; real value comes from each environment's own config
 
-      - name: Dependency audit (high/critical only)
-        run: npm audit --audit-level=high
+      - name: Security audit
+        run: npm audit --audit-level=moderate
         continue-on-error: true
+
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
 
   simulation-smoke-test:
     name: End-to-end simulation smoke test
@@ -99,11 +141,14 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: backend
-        run: npm install
+        run: npm ci
 
       - name: Start backend server in the background
         working-directory: backend
-        run: nohup node server.js & npx wait-on http://localhost:5001/api/health --timeout 30000
+        run: |
+          nohup node server.js &
+          sleep 5
+          timeout 30 bash -c 'until curl -f http://localhost:5001/api/health; do sleep 2; done' || exit 1
         env:
           MONGO_URI: mongodb://localhost:27017/ruaitech_ci
           JWT_SECRET: ci-test-secret-not-for-production
@@ -116,3 +161,30 @@ jobs:
         run: node __simulation__.js
         continue-on-error: true # see CHANGELOG_PHASE9.md — this script silently skips admin-gated checks
         # if SEED_SUPER_ADMIN_EMAIL/PASSWORD aren't seeded into the CI database first.
+
+  code-quality:
+    name: Code quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies for root
+        run: npm ci
+
+      - name: Check for package lock changes
+        run: |
+          git diff --name-only HEAD~1 HEAD | grep -q "package-lock.json" && echo "Lock file changed" || echo "No lock file changes"
+        continue-on-error: true
+
+      - name: Validate commit messages
+        run: |
+          # Add basic commit validation
+          COMMIT_MSG=$(git log --format=%s -n 1 HEAD)
+          if [[ ${#COMMIT_MSG} -gt 72 ]]; then
+            echo "Warning: Commit message is longer than 72 characters"
+          fi

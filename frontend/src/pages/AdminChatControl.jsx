@@ -12,83 +12,16 @@
 // hook ChatMonitor.js and MessagesPage.js already use correctly — so the
 // toggle has something genuine to attach to, and "ONLINE" only ever shows
 // when it's actually true.
-import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import React from 'react';
 import { useChat } from '../hooks/useChat';
 
 const AdminChatControl = () => {
   const authToken = localStorage.getItem('token');
-  const { connected } = useChat({ authToken }); // holds the real socket this page was missing
+  const { connected } = useChat({ authToken });
 
-  const [available, setAvailable] = useState(null); // the server-side preference flag
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // With REST presence toggles removed, online/offline is derived from realtime connection.
+  const trulyOnline = connected;
 
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get('/chat/admin/status');
-        setAvailable(response.data.status);
-      } catch (err) {
-        setError(err.message);
-        console.error('Error fetching admin status:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStatus();
-  }, []);
-
-  const toggleStatus = async () => {
-    try {
-      setLoading(true);
-      const response = await api.post('/chat/admin/status', {
-        status: !available
-      });
-      setAvailable(response.data.status);
-    } catch (err) {
-      setError(err.message);
-      console.error('Error updating admin status:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // True presence is the AND of both conditions — this is the line that
-  // makes the badge below honest instead of optimistic.
-  const trulyOnline = connected && !!available;
-
-  if (loading && available === null) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'var(--bg-void)',
-        color: 'var(--text-primary)'
-      }}>
-        Loading...
-      </div>
-    );
-  }
-
-  if (error && available === null) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'var(--bg-void)',
-        color: 'var(--color-accent)'
-      }}>
-        Error: {error}
-      </div>
-    );
-  }
 
   return (
     <div style={{
@@ -229,37 +162,25 @@ const AdminChatControl = () => {
           </div>
 
           <button
-            onClick={toggleStatus}
-            disabled={loading || !connected}
-            title={!connected ? 'Waiting for realtime connection before this can take effect' : undefined}
+            onClick={() => {}}
+            disabled
             style={{
               padding: '1rem 2rem',
               fontSize: '1.1rem',
               fontWeight: 600,
-              background: available
-                ? 'linear-gradient(135deg, var(--color-accent), #ff0066)'
-                : 'linear-gradient(135deg, var(--color-primary), #00b4ff)',
+              background: 'linear-gradient(135deg, #6b7280, #4a4a6a)',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
-              cursor: (loading || !connected) ? 'not-allowed' : 'pointer',
-              opacity: (loading || !connected) ? 0.5 : 1,
+              cursor: 'not-allowed',
+              opacity: 0.6,
               transition: 'transform 0.2s, box-shadow 0.2s',
               minWidth: '200px'
             }}
-            onMouseOver={(e) => {
-              if (connected && !loading) {
-                e.currentTarget.style.transform = 'scale(1.02)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 212, 255, 0.3)';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
           >
-            {loading ? 'Processing...' : available ? 'Go Offline' : 'Go Online'}
+            Presence is realtime-only
           </button>
+
         </div>
       </div>
     </div>

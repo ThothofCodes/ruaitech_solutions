@@ -5,6 +5,8 @@ const { protect, staffGuard, deptHeadGuard, superAdminGuard } = require('../midd
 
 router.use(protect, staffGuard);
 
+// NOTE: Public endpoints (e.g. /api/tickets/track) are registered
+// separately (see publicTicketsTrack.js) so this router stays protected.
 router.get('/',                ctrl.getTickets);
 router.post('/',               ctrl.createTicket);
 router.get('/my',              ctrl.getMyTickets);

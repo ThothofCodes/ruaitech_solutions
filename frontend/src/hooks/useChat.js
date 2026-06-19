@@ -183,9 +183,10 @@ export function useChat({ authToken = null } = {}) {
   const sendCustomerMessage = useCallback((message, guestId) => {
     if (!socketRef.current?.connected) return;
     
+    // Always include the guestId so socket.js can route the message
     socketRef.current.emit('chat-message', { 
-      message, 
-      guestId 
+      message,
+      guestId
     }, (ack) => {
       if (ack?.success) {
         // Find and update the temporary message with the server-confirmed message
@@ -250,20 +251,6 @@ export function useChat({ authToken = null } = {}) {
   }, []);
 
   // ── Admin status management ──────────────────────────────────────
-  const setAdminOnlineStatus = useCallback(async (status) => {
-    try {
-      // Update the local state immediately for responsiveness
-      setAdminOnline(status);
-      
-      // Call the API to persist the status
-      await api.post('/chat/admin/status', { status });
-    } catch (error) {
-      console.error('Error updating admin status:', error);
-      // Revert to previous state if API call fails
-      setAdminOnline(!status);
-    }
-  }, []);
-
   return {
     connected,
     // Phase 9 market research, Tier 1 #4 (RuaiPulseBoard.js) needs direct
@@ -285,6 +272,5 @@ export function useChat({ authToken = null } = {}) {
     requestCallback, // Still available for non-admin use
     dismissAdminAlert: () => setAdminAvailableAlert(false),
     setCurrentConversation,
-    setAdminOnlineStatus  // Added new function for updating admin status
   };
 }

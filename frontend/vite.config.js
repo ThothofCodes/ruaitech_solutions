@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+
+
   server: {
     port: 3000,
     strictPort: true,
@@ -26,13 +28,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunk — large stable libraries
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
-          socket: ['socket.io-client'],
-          ui: ['react-hot-toast', 'axios'],
-        },
+        manualChunks: undefined,
       },
     },
   },
@@ -43,10 +39,6 @@ export default defineConfig({
     esbuildOptions: {
       loader: { '.js': 'jsx' },
     },
-  },
-  esbuild: {
-    loader: 'jsx',
-    include: /src\/.*\.js$/,
-    exclude: [],
-  },
+  }
+
 });
