@@ -1,0 +1,37 @@
+// Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+
+const COLORS = {
+  pending:    { color: '#f39c12', bg: 'rgba(243,156,18,0.1)',    border: 'rgba(243,156,18,0.35)'   },
+  confirmed:  { color: '#3498db', bg: 'rgba(52,152,219,0.1)',    border: 'rgba(52,152,219,0.35)'   },
+  processing: { color: '#9b59b6', bg: 'rgba(155,89,182,0.1)',    border: 'rgba(155,89,182,0.35)'   },
+  shipped:    { color: '#1abc9c', bg: 'rgba(26,188,156,0.1)',    border: 'rgba(26,188,156,0.35)'   },
+  delivered:  { color: '#2ecc71', bg: 'rgba(46,204,113,0.1)',    border: 'rgba(46,204,113,0.35)'   },
+  completed:  { color: '#2ecc71', bg: 'rgba(46,204,113,0.1)',    border: 'rgba(46,204,113,0.35)'   },
+  cancelled:  { color: '#e74c3c', bg: 'rgba(231,76,60,0.1)',     border: 'rgba(231,76,60,0.35)'    },
+  paid:       { color: '#2ecc71', bg: 'rgba(46,204,113,0.1)',    border: 'rgba(46,204,113,0.35)'   },
+  unpaid:     { color: '#e67e22', bg: 'rgba(230,126,34,0.1)',    border: 'rgba(230,126,34,0.35)'   },
+  refunded:   { color: '#95a5a6', bg: 'rgba(149,165,166,0.1)',   border: 'rgba(149,165,166,0.35)'  },
+  active:     { color: '#2ecc71', bg: 'rgba(46,204,113,0.1)',    border: 'rgba(46,204,113,0.35)'   },
+  inactive:   { color: '#e74c3c', bg: 'rgba(231,76,60,0.1)',     border: 'rgba(231,76,60,0.35)'    },
+};
+
+export default function StatusBadge({ status }) {
+  const s = COLORS[status] || { color: '#95a5a6', bg: 'rgba(149,165,166,0.1)', border: 'rgba(149,165,166,0.3)' };
+  return (
+    <span style={{
+      background: s.bg,
+      color: s.color,
+      border: `1px solid ${s.border}`,
+      padding: '3px 10px',
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: '0.04em',
+      textTransform: 'capitalize',
+      fontFamily: "'Inter', sans-serif",
+      whiteSpace: 'nowrap',
+    }}>
+      {status}
+    </span>
+  );
+}

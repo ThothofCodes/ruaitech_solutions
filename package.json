@@ -1,0 +1,23 @@
+{
+  "name": "ruaitech-solutions",
+  "version": "1.0.0",
+  "description": "Ruai Tech Solutions — Integrated Platform (Monorepo Root)",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix frontend\"",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm start --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "seed": "npm run seed --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "author": "Thoth of Codes <codeofthoth@outlook.com>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.17.0",
+    "socket.io-client": "^4.8.3"
+  }
+}

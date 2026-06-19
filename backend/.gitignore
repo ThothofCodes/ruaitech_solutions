@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+# FIX (Continuity Audit, Part Three): a real, unused RSA private key was
+# previously committed at backend/keys/private-key.pem with nothing here to
+# stop it. It's been deleted; these patterns stop it (or any future key)
+# from silently landing in version control again.
+*.pem
+*.key
+keys/
+coverage/

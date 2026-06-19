@@ -1,0 +1,118 @@
+name: CI
+
+# Runs on every push and PR against main/develop. This is the project's
+# first CI pipeline (see CHANGELOG_PHASE9.md) — previously there was no
+# automated check at all, so a broken seed script, an unmounted route file,
+# or a hardcoded sandbox URL could only ever be caught by hand.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  backend:
+    name: Backend — lint, test, audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run test suite (jest)
+        run: npm test -- --ci
+        env:
+          JWT_SECRET: ci-test-secret-not-for-production
+          NODE_ENV: test
+
+      - name: Dependency audit (high/critical only)
+        run: npm audit --audit-level=high
+        continue-on-error: true # report, don't block — see Part Seven of the audit for the remediation backlog
+
+      - name: Confirm server.js parses cleanly
+        run: node -c server.js
+
+      - name: Confirm seed.js parses cleanly
+        run: node -c seed.js
+
+  frontend:
+    name: Frontend — lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npx eslint src --ext .js,.jsx
+        continue-on-error: true # the project has no eslint config committed yet — see CHANGELOG_PHASE9.md follow-ups
+
+      - name: Run component tests (vitest)
+        run: npm test
+        continue-on-error: true # first test runner wired up this phase; suite is intentionally still thin
+
+      - name: Production build
+        run: npm run build
+        env:
+          VITE_API_URL: https://api.placeholder.invalid # build-time only; real value comes from each environment's own config
+
+      - name: Dependency audit (high/critical only)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  simulation-smoke-test:
+    name: End-to-end simulation smoke test
+    runs-on: ubuntu-latest
+    needs: [backend]
+    services:
+      mongodb:
+        image: mongo:7
+        ports: ['27017:27017']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Start backend server in the background
+        working-directory: backend
+        run: nohup node server.js & npx wait-on http://localhost:5001/api/health --timeout 30000
+        env:
+          MONGO_URI: mongodb://localhost:27017/ruaitech_ci
+          JWT_SECRET: ci-test-secret-not-for-production
+          PORT: 5001
+          NODE_ENV: test
+          MPESA_ENV: sandbox
+          CLIENT_URL: http://localhost:3000
+
+      - name: Run __simulation__.js against the live server
+        run: node __simulation__.js
+        continue-on-error: true # see CHANGELOG_PHASE9.md — this script silently skips admin-gated checks
+        # if SEED_SUPER_ADMIN_EMAIL/PASSWORD aren't seeded into the CI database first.

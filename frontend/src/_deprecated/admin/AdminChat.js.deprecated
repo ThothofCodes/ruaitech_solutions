@@ -1,0 +1,475 @@
+// Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+import { useState, useEffect, useRef } from 'react';
+import { useSocket } from '../../../hooks/useSocket';
+
+const AdminChat = () => {
+  const [conversations, setConversations] = useState([]);
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [callbackRequests, setCallbackRequests] = useState([]);
+  const [activeTab, setActiveTab] = useState('live-chats'); // live-chats or callback-requests
+  
+  const { user } = useAdminAuth();
+  const socket = useSocket();
+  const messagesEndRef = useRef(null);
+  
+  // Fetch conversations and callback requests
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch conversations
+        const convResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chat/conversations`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const convData = await convResponse.json();
+        if (convData.success) {
+          setConversations(convData.data);
+        }
+        
+        // Fetch callback requests
+        const callbackResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chat/callbacks`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const callbackData = await callbackResponse.json();
+        if (callbackData.success) {
+          setCallbackRequests(callbackData.data);
+        }
+      } catch (error) {
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  // Listen for socket events
+  useEffect(() => {
+    if (socket) {
+      // Listen for new messages
+      socket.on('new-chat-message', (data) => {
+        // Update conversation list
+        setConversations(prev => prev.map(conv => 
+          conv._id === data.conversationId 
+            ? { ...conv, lastMessageAt: new Date(), unreadCount: conv.unreadCount + 1 } 
+            : conv
+        ));
+        
+        // If this is the active conversation, add the message
+        if (activeConversation && activeConversation._id === data.conversationId) {
+          setMessages(prev => [...prev, data.message]);
+          
+          // Mark as read
+          fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chat/conversation/${data.conversationId}/read`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      });
+      
+      // Listen for new callback requests
+      socket.on('new-callback-request', (data) => {
+        setCallbackRequests(prev => [data, ...prev]);
+      });
+      
+      return () => {
+        socket.off('new-chat-message');
+        socket.off('new-callback-request');
+      };
+    }
+  }, [socket, activeConversation]);
+
+  // Load conversation messages when active conversation changes
+  useEffect(() => {
+    if (activeConversation) {
+      const loadMessages = async () => {
+        try {
+          const response = await fetch(`/api/chat/conversation/${activeConversation._id}`);
+          const data = await response.json();
+          if (data.success) {
+            setMessages(data.data);
+            
+            // Mark as read
+            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/chat/conversation/${activeConversation._id}/read`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                'Content-Type': 'application/json'
+              }
+            });
+          }
+        } catch (error) {
+        }
+      };
+      
+      loadMessages();
+    } else {
+      setMessages([]);
+    }
+  }, [activeConversation]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeConversation) return;
+    
+    if (socket) {
+      // Extract guestId from conversationId (assuming format 'guest-xxx')
+      const guestId = activeConversation._id.replace('guest-', '');
+      
+      socket.emit('admin-send-message', {
+        conversationId: activeConversation._id,
+        message: newMessage,
+        guestId: guestId
+      });
+    }
+  };
+
+  const updateCallbackStatus = async (id, status) => {
+    try {
+      const response = await fetch(`/api/chat/callbacks/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status,
+          contactedBy: user.id
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setCallbackRequests(prev => 
+          prev.map(req => 
+            req._id === id ? { ...req, status } : req
+          )
+        );
+      }
+    } catch (error) {
+    }
+  };
+
+  return (
+    <div className="page-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="section-header">
+        <h2>Messages</h2>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className={`tab-btn ${activeTab === 'live-chats' ? 'active' : ''}`}
+            onClick={() => setActiveTab('live-chats')}
+          >
+            Live Chats
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'callback-requests' ? 'active' : ''}`}
+            onClick={() => setActiveTab('callback-requests')}
+          >
+            Callback Requests
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'live-chats' ? (
+        <div style={{ display: 'flex', gap: '1.5rem', height: '600px' }}>
+          {/* Conversations list */}
+          <div style={{ 
+            width: '300px', 
+            background: 'var(--bg-card)', 
+            borderRadius: '12px', 
+            border: 'var(--border-white)',
+            boxShadow: 'var(--shadow-card)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ padding: '1rem', borderBottom: '1px solid rgba(240,238,255,0.1)' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#f0eeff' }}>Active Conversations</h3>
+            </div>
+            <div style={{ maxHeight: 'calc(100% - 60px)', overflowY: 'auto' }}>
+              {conversations.length === 0 ? (
+                <div style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                  No active conversations
+                </div>
+              ) : (
+                conversations.map((conv, index) => (
+                  <div
+                    key={index}
+                    onClick={() => setActiveConversation(conv)}
+                    style={{
+                      padding: '1rem',
+                      cursor: 'pointer',
+                      background: activeConversation && activeConversation._id === conv._id 
+                        ? 'linear-gradient(90deg, rgba(0,212,255,0.1), rgba(0,180,255,0.05))' 
+                        : 'transparent',
+                      borderLeft: activeConversation && activeConversation._id === conv._id 
+                        ? '3px solid #00d4ff' 
+                        : '3px solid transparent',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: '600', color: '#f0eeff' }}>
+                        Guest {conv._id.replace('guest-', '').substring(0, 8)}...
+                      </div>
+                      {conv.unreadCount > 0 && (
+                        <span style={{
+                          background: 'linear-gradient(135deg, #ff3366, #ff0066)',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          fontWeight: 'bold'
+                        }}>
+                          {conv.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {conv.lastMessage}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {new Date(conv.lastMessageAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Chat window */}
+          <div style={{ 
+            flex: 1, 
+            background: 'var(--bg-card)', 
+            borderRadius: '12px', 
+            border: 'var(--border-white)',
+            boxShadow: 'var(--shadow-card)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {activeConversation ? (
+              <>
+                <div style={{ 
+                  padding: '1rem', 
+                  borderBottom: '1px solid rgba(240,238,255,0.1)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', color: '#f0eeff' }}>
+                      Conversation with Guest
+                    </h3>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {activeConversation._id}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Active now
+                  </div>
+                </div>
+                
+                <div style={{ flex: 1, padding: '1rem', overflowY: 'auto' }}>
+                  {messages.length === 0 ? (
+                    <div style={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      justifyContent: 'center', 
+                      alignItems: 'center',
+                      color: 'var(--text-muted)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '10px' }}>💬</div>
+                      <div>No messages yet</div>
+                    </div>
+                  ) : (
+                    <div>
+                      {messages.map((msg, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            marginBottom: '10px',
+                            display: 'flex',
+                            justifyContent: msg.senderType === 'admin' ? 'flex-end' : 'flex-start',
+                          }}
+                        >
+                          <div
+                            style={{
+                              maxWidth: '80%',
+                              padding: '10px 15px',
+                              borderRadius: '12px',
+                              background: msg.senderType === 'admin' 
+                                ? 'linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,180,255,0.1))' 
+                                : 'linear-gradient(135deg, rgba(255,51,102,0.15), rgba(255,0,102,0.1))',
+                              border: msg.senderType === 'admin' 
+                                ? '1px solid rgba(0,212,255,0.2)' 
+                                : '1px solid rgba(255,51,102,0.2)',
+                              color: 'var(--text-primary)',
+                              fontSize: '14px',
+                            }}
+                          >
+                            {msg.message}
+                            <div style={{ 
+                              fontSize: '10px', 
+                              color: 'var(--text-muted)', 
+                              marginTop: '4px',
+                              textAlign: 'right'
+                            }}>
+                              {new Date(msg.createdAt).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
+                </div>
+                
+                <form onSubmit={sendMessage} style={{ padding: '1rem', borderTop: '1px solid rgba(240,238,255,0.1)' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Type your message..."
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: 'rgba(14,10,20,0.6)',
+                        border: '1px solid rgba(240,238,255,0.12)',
+                        borderRadius: '6px',
+                        color: 'var(--text-primary)',
+                        fontSize: '14px',
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newMessage.trim()}
+                      style={{
+                        padding: '10px 15px',
+                        background: 'linear-gradient(135deg, #00d4ff, #00b4ff)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: newMessage.trim() ? 'pointer' : 'not-allowed',
+                        opacity: newMessage.trim() ? 1 : 0.6,
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <div style={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center', 
+                alignItems: 'center',
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                padding: '2rem'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '1rem' }}>💬</div>
+                <div style={{ fontSize: '18px', color: '#f0eeff', marginBottom: '0.5rem' }}>Select a conversation</div>
+                <div>Choose a conversation from the list to start chatting</div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        // Callback requests tab
+        <div style={{ 
+          background: 'var(--bg-card)', 
+          borderRadius: '12px', 
+          border: 'var(--border-white)',
+          boxShadow: 'var(--shadow-card)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid rgba(240,238,255,0.1)' }}>
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#f0eeff' }}>Callback Requests</h3>
+          </div>
+          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            {callbackRequests.length === 0 ? (
+              <div style={{ padding: '2rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                No callback requests
+              </div>
+            ) : (
+              <table className="table-styled">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Contact</th>
+                    <th>Preferred Time</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {callbackRequests.map((request, index) => (
+                    <tr key={index}>
+                      <td>{request.customerName}</td>
+                      <td>{request.contact}</td>
+                      <td>{new Date(request.preferredTime).toLocaleString()}</td>
+                      <td>
+                        <span 
+                          className="status-badge"
+                          style={{
+                            color: request.status === 'pending' ? '#ff9900' : 
+                                   request.status === 'contacted' ? '#00d4ff' : '#2ecc71',
+                            borderColor: request.status === 'pending' ? 'rgba(255,153,0,0.3)' : 
+                                         request.status === 'contacted' ? 'rgba(0,212,255,0.3)' : 'rgba(46,204,113,0.3)',
+                          }}
+                        >
+                          {request.status}
+                        </span>
+                      </td>
+                      <td>
+                        {request.status === 'pending' && (
+                          <button
+                            onClick={() => updateCallbackStatus(request._id, 'contacted')}
+                            style={{
+                              padding: '5px 10px',
+                              background: 'linear-gradient(135deg, #00d4ff, #00b4ff)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Mark as Contacted
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminChat;

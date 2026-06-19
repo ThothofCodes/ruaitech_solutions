@@ -1,0 +1,32 @@
+// Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const UserSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
+  password: { type: String, required: true, minlength: 6, select: false },
+  role: {
+    type: String,
+    enum: ['SUPER_ADMIN', 'DEPT_HEAD_OWNER', 'STAFF', 'admin', 'staff'], // legacy support
+    default: 'STAFF',
+  },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
+  departmentSlug: { type: String, default: null },
+  isOwner: { type: Boolean, default: false },
+  superAdminLocked: { type: Boolean, default: false }, // prevents modification via standard endpoint
+  isActive: { type: Boolean, default: true },
+  lastLogin: Date,
+}, { timestamps: true });
+
+UserSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+UserSchema.methods.matchPassword = function (entered) {
+  return bcrypt.compare(entered, this.password);
+};
+
+module.exports = mongoose.model('User', UserSchema);

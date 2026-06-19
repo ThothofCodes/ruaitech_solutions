@@ -1,0 +1,39 @@
+{
+  "name": "ruaitech-solutions-frontend",
+  "version": "1.0.0",
+  "description": "Ruai Tech Solutions — Integrated Platform UI",
+  "private": true,
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:smoke": "node ../__simulation__.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.16.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^6.30.3",
+    "recharts": "^2.15.4",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.18.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^25.0.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  },
+  "author": "Thoth of Codes <codeofthoth@outlook.com>",
+  "license": "MIT",
+  "proxy": "http://localhost:5001"
+}

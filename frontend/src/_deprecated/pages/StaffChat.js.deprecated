@@ -1,0 +1,66 @@
+// Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import ChatWidget from '../../components/ChatWidget';
+
+export default function StaffChat() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('live-chat');
+  const authToken = localStorage.getItem('token');
+
+  return (
+    <div style={{ padding: '2rem', background: 'var(--bg-void)', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', margin: 0, color: '#f0eeff' }}>Customer Support Center</h1>
+          <p style={{ color: '#b8a8d8', margin: '0.5rem 0 0' }}>Manage customer communications</p>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <button
+          onClick={() => setActiveTab('live-chat')}
+          className={`btn ${activeTab === 'live-chat' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ borderRadius: '8px 0 0 8px' }}
+        >
+          Live Chat
+        </button>
+        <button
+          onClick={() => setActiveTab('callbacks')}
+          className={`btn ${activeTab === 'callbacks' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ borderRadius: '0 8px 8px 0' }}
+        >
+          Callback Requests
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'live-chat' ? (
+        <div style={{ 
+          height: '70vh', 
+          border: '1px solid rgba(240, 238, 255, 0.1)', 
+          borderRadius: '12px', 
+          background: 'var(--bg-surface)',
+          overflow: 'hidden'
+        }}>
+          <ChatWidget isAdmin={true} authToken={authToken} />
+        </div>
+      ) : (
+        <div style={{ 
+          border: '1px solid rgba(240, 238, 255, 0.1)', 
+          borderRadius: '12px', 
+          background: 'var(--bg-surface)',
+          padding: '2rem'
+        }}>
+          <h2 style={{ color: '#f0eeff', marginBottom: '1.5rem' }}>Callback Requests</h2>
+          <div style={{ color: '#b8a8d8', textAlign: 'center', padding: '2rem' }}>
+            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📞</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: '600', color: '#f0eeff', marginBottom: '0.5rem' }}>No pending callbacks</div>
+            <div>Customer callback requests will appear here when submitted</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,70 @@
+name: CD — Deploy
+
+# README.md documents PythonAnywhere as the backend deployment target, so
+# this workflow is templated for that specifically rather than guessing at
+# a generic host. It only runs after CI passes on main, and the deploy step
+# is gated on PYTHONANYWHERE_API_TOKEN existing as a repo secret — so this
+# workflow is a safe no-op (it skips, not fails) until that's configured.
+#
+# PythonAnywhere's reload endpoint only restarts the running app with
+# whatever code is already on disk there — it does NOT pull from GitHub.
+# Getting new code onto the server is a separate step (see "Sync code"
+# below) and depends on your PythonAnywhere plan:
+#   - Paid plans: SSH is available, so an `actions/checkout` + `rsync`/`scp`
+#     step (or even just `ssh ... "git pull"` if you've cloned the repo
+#     there) works directly.
+#   - Free plans: no SSH. Use PythonAnywhere's "Bash console" API
+#     (https://www.pythonanywhere.com/api/v0/user/{username}/consoles/) to
+#     run `git pull` remotely instead — left as a clearly marked TODO below
+#     since the exact console ID depends on your account.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   PYTHONANYWHERE_USERNAME   your PythonAnywhere username
+#   PYTHONANYWHERE_API_TOKEN  from Account → API Token tab
+#   PYTHONANYWHERE_DOMAIN     e.g. codeofthoth.pythonanywhere.com
+#   PYTHONANYWHERE_HOST       www.pythonanywhere.com (US) or eu.pythonanywhere.com (EU)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # allows manually triggering a reload from the Actions tab
+
+jobs:
+  check-secrets:
+    name: Check deploy secrets are configured
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.PYTHONANYWHERE_API_TOKEN }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PYTHONANYWHERE_API_TOKEN is not set — skipping deploy. This is expected until you add it under repo Settings → Secrets."
+          fi
+
+  deploy:
+    name: Reload PythonAnywhere web app
+    needs: check-secrets
+    if: needs.check-secrets.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # TODO (manual setup required — see header comment): sync the new
+      # commit's code onto the PythonAnywhere filesystem here, e.g. via the
+      # consoles API if you're on the free plan, or `rsync`/`git pull` over
+      # SSH if you're on a paid plan. Reloading without this step restarts
+      # the app with whatever code is already there, not what's in this push.
+
+      - name: Reload web app via PythonAnywhere API
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST \
+            "https://${{ secrets.PYTHONANYWHERE_HOST }}/api/v0/user/${{ secrets.PYTHONANYWHERE_USERNAME }}/webapps/${{ secrets.PYTHONANYWHERE_DOMAIN }}/reload/" \
+            -H "Authorization: Token ${{ secrets.PYTHONANYWHERE_API_TOKEN }}")
+          echo "HTTP status: $response"
+          cat /tmp/response.json
+          if [ "$response" != "200" ]; then
+            echo "::error::Reload failed with status $response"
+            exit 1
+          fi
