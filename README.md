@@ -35,7 +35,7 @@ Ensure the following are installed before proceeding:
 | MongoDB | Atlas (cloud) **or** local 6.x+ | `mongod --version` |
 | Git | Any recent | `git --version` |
 
-> **Kenya network note:** If you are on a slow connection, use `npm install --prefer-offline` after the first install to avoid re-downloading packages.
+> **Network note:** If you are on a slow connection, use `npm install --prefer-offline` after the first install to avoid re-downloading packages.
 
 ---
 
@@ -43,7 +43,7 @@ Ensure the following are installed before proceeding:
 
 ```bash
 # Clone the repository
-git clone https://github.com/3mutua/ruaitech_solutions.git
+git clone https://github.com/Thothofcodes/ruaitech_solutions.git
 cd ruaitech_solutions
 
 # Install root dev tools (concurrently)
