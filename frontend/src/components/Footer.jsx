@@ -38,7 +38,7 @@ export default function Footer({ variant = 'public' }) {
             {/* Quick links */}
             <div>
               <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#e74c3c', marginBottom: '0.85rem', fontFamily: "'Poppins', sans-serif" }}>Quick Links</p>
-              {[['/store','Tech Store'],['/calculator','Price Calculator'],['/consult','Consultations'],['/services','Services'],['/contact','Contact Us']].map(([href, label]) => (
+              {[['/store','Tech Store'],['/calculator','Price Calculator'],['/consult','Consultations'],['/services','Services'],['/help','Help Desk'],['/contact','Contact Us']].map(([href, label]) => (
                 <a key={href} href={href} style={{ display: 'block', color: 'var(--text-muted)', fontSize: 13, marginBottom: 7, fontFamily: "'Inter', sans-serif", transition: 'all 0.2s' }}
                   onMouseOver={(e) => { e.target.style.color = '#f0eeff'; e.target.style.paddingLeft = '6px'; }}
                   onMouseOut={(e) => { e.target.style.color = 'var(--text-muted)'; e.target.style.paddingLeft = '0'; }}>

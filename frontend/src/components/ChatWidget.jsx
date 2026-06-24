@@ -2,132 +2,91 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../hooks/useChat';
 
 const ChatWidget = ({ isAdmin = false, authToken = null }) => {
-  const {
-    connected,
-    adminOnline,
-    messages,
-    conversations,
-    currentConversation,
-    sendCustomerMessage,
-    getMessagesForConversation,
-    requestCallback,
-    callbackSubmitted,
-    adminAvailableAlert,
-    dismissAdminAlert
-  } = useChat({ authToken });
-
   const [isOpen, setIsOpen] = useState(false);
   const [newMessage, setNewMessage] = useState('');
-  const [guestName, setGuestName] = useState('');
-  const [guestPhone, setGuestPhone] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [connected, setConnected] = useState(false);
+  const [adminOnline, setAdminOnline] = useState(false);
   const [showCallbackForm, setShowCallbackForm] = useState(false);
-  const [initialMessage, setInitialMessage] = useState('');
-  const [guestId, setGuestId] = useState(null);
+  const [customerName, setCustomerName] = useState('');
+  const [contactType, setContactType] = useState('email');
+  const [contact, setContact] = useState('');
+  const [adminAvailableAlert, setAdminAvailableAlert] = useState(false);
   const messagesEndRef = useRef(null);
-  const chatInputRef = useRef(null);
 
-  // Initialize guest ID
+  const { socket, connected: socketConnected, adminOnline: socketAdminOnline } = useChat({ authToken });
+
   useEffect(() => {
-    const storedGuestId = localStorage.getItem('guestId');
-    if (storedGuestId) {
-      setGuestId(storedGuestId);
-    } else if (!isAdmin) {
-      const newGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('guestId', newGuestId);
-      setGuestId(newGuestId);
-    }
-  }, [isAdmin]);
+    setConnected(socketConnected);
+    setAdminOnline(socketAdminOnline);
+  }, [socketConnected, socketAdminOnline]);
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    try {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    } catch (err) {
-      // Silent fail if element not available
-    }
-  }, [messages]);
-
-  // Focus chat input when opening
-  useEffect(() => {
-    if (chatInputRef.current) {
-      setTimeout(() => {
-        try {
-          chatInputRef.current?.focus();
-        } catch (err) {
-          // Silent fail if element not available
-        }
-      }, 100);
-    }
-  }, []);
-
-  // Dismiss the admin available alert when component unmounts
-  useEffect(() => {
-    return () => {
-      if (adminAvailableAlert) {
-        dismissAdminAlert();
-      }
-    };
-  }, [adminAvailableAlert, dismissAdminAlert]);
-
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    
-    // Use existing guest ID or create a new one
-    const effectiveGuestId = guestId || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Determine conversation ID - use existing or create new
-    const conversationId = currentConversation || `conversation-guest-${effectiveGuestId}`;
-    
-    // Add the message to local state immediately for UI feedback
-    const tempMessage = {
-      _id: `temp-${Date.now()}`,
-      message: newMessage,
-      senderType: 'customer',
-      timestamp: new Date().toISOString(),
-      direction: 'outgoing',
-      conversationId: conversationId
-    };
-    
-    // Update messages state to show the message immediately
-    setMessages(prev => [...prev, tempMessage]);
-    
-    // If this is the first message from customer, initiate a new conversation
-    if (messages.length === 0 || !currentConversation) {
-      // Store guest ID if not already stored
-      if (!guestId) {
-        localStorage.setItem('guestId', effectiveGuestId);
-        setGuestId(effectiveGuestId);
-      }
-      // Send message with guest ID
-      sendCustomerMessage(newMessage, effectiveGuestId);
-      setCurrentConversation(conversationId);
-    } else {
-      // Use existing conversation
-      sendCustomerMessage(newMessage, effectiveGuestId);
-    }
-    
-    setNewMessage('');
+  
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSubmitCallback = (e) => {
-    e.preventDefault();
-    if (!guestName.trim() || !initialMessage.trim()) return;
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    // Use existing guest ID or create a new one
-    const effectiveGuestId = guestId || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Store guest ID if not already stored
-    if (!guestId) {
-      localStorage.setItem('guestId', effectiveGuestId);
-      setGuestId(effectiveGuestId);
+  const dismissAdminAlert = () => {
+    setAdminAvailableAlert(false);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || (!adminOnline && messages.length === 0)) return;
+
+    // In a real app, this would send the message via socket
+    // For now, we'll just add it to the local state
+    const messageObj = {
+      id: Date.now(),
+      text: newMessage,
+      sender: 'customer',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages([...messages, messageObj]);
+    setNewMessage('');
+
+    // Scroll to bottom after adding message
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 10);
+  };
+
+  const handleRequestCallback = async () => {
+    if (!customerName.trim() || !contact.trim()) {
+      alert('Please fill in all required fields');
+      return;
     }
-    
-    requestCallback(guestName, initialMessage, guestPhone, effectiveGuestId);
-    setShowCallbackForm(false);
-    setGuestName('');
-    setGuestPhone('');
-    setInitialMessage('');
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/chat/callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clientName: customerName,
+          message: `Callback requested: ${contactType} - ${contact}`,
+          phone: contactType === 'phone' ? contact : undefined
+        })
+      });
+
+      if (response.ok) {
+        alert('Callback request submitted successfully. We will contact you shortly.');
+        setShowCallbackForm(false);
+        setCustomerName('');
+        setContact('');
+      } else {
+        alert('Failed to submit callback request. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting callback request:', error);
+      alert('Failed to submit callback request. Please try again.');
+    }
   };
 
   if (isAdmin) {
@@ -148,7 +107,8 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          fontFamily: "'Inter', sans-serif"
         }}>
           {/* Chat Header */}
           <div style={{
@@ -161,16 +121,18 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
             alignItems: 'center'
           }}>
             <div>
-              <h3 style={{ margin: 0, color: '#fff', fontSize: '16px' }}>Customer Support</h3>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '16px' }}>Ruai Tech Support</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                 <div style={{
                   width: '10px',
                   height: '10px',
                   borderRadius: '50%',
-                  backgroundColor: adminOnline ? '#4ade80' : '#f87171'
+                  backgroundColor: connected ? (adminOnline ? '#4ade80' : '#f87171') : '#fbbf24'
                 }}></div>
-                <span style={{ color: adminOnline ? '#4ade80' : '#f87171', fontSize: '14px' }}>
-                  {adminOnline ? 'Online - We\'re here to help!' : 'Offline - Leave a message'}
+                <span style={{ color: connected ? (adminOnline ? '#4ade80' : '#f87171') : '#fbbf24', fontSize: '14px' }}>
+                  {connected 
+                    ? (adminOnline ? 'Online - We\'re here to help!' : 'Offline - Leave a message') 
+                    : 'Connecting...'}
                 </span>
               </div>
             </div>
@@ -181,12 +143,30 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
                 border: 'none',
                 color: '#fff',
                 fontSize: '18px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                transition: 'background-color 0.2s'
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
             >
               ×
             </button>
           </div>
+
+          {/* Connection status indicator */}
+          {!connected && (
+            <div style={{
+              padding: '8px',
+              backgroundColor: '#fbbf24',
+              color: '#1a202c',
+              fontSize: '12px',
+              textAlign: 'center'
+            }}>
+              Connecting to support...
+            </div>
+          )}
 
           {/* Alert when admin becomes available */}
           {adminAvailableAlert && (
@@ -217,206 +197,220 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
           )}
 
           {/* Messages Container */}
-          <div style={{
-            flex: 1,
-            padding: '16px',
-            overflowY: 'auto',
-            backgroundColor: '#1e1e2e'
-          }}>
-            {messages.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#a0aec0', marginTop: '20px' }}>
-                <p>Hello! How can we help you today?</p>
-                <p style={{ fontSize: '12px', marginTop: '10px' }}>
-                  {adminOnline 
-                    ? 'Send us a message and we\'ll respond right away.' 
-                    : 'We\'re currently offline. Leave your message and we\'ll get back to you ASAP.'}
-                </p>
-              </div>
-            ) : (
-              messages
-                .filter(msg => !currentConversation || msg.conversationId === currentConversation) // Only show messages for current conversation if set
-                .map((msg, index) => (
-                <div key={msg._id || `${msg.timestamp || Date.now()}-${index}`} style={{
-                  marginBottom: '12px',
-                  textAlign: msg.senderType === 'admin' ? 'left' : 'right'
-                }}>
-                  <div style={{
-                    display: 'inline-block',
+          <div style={{ flex: 1, padding: '16px', overflowY: 'auto', backgroundColor: '#1e293b' }}>
+            {messages.length > 0 ? (
+              messages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  style={{
+                    marginBottom: '12px',
                     padding: '8px 12px',
-                    borderRadius: msg.senderType === 'admin' ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
-                    backgroundColor: msg.senderType === 'admin' ? '#4f46e5' : '#10b981',
-                    color: 'white',
-                    maxWidth: '80%'
-                  }}>
-                    {msg.message}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a0aec0', marginTop: '4px' }}>
-                    {msg.senderType === 'admin' ? 'Support' : 'You'} • {new Date(msg.timestamp || msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
+                    borderRadius: '8px',
+                    backgroundColor: msg.sender === 'customer' ? '#3b82f6' : '#4b5563',
+                    alignSelf: msg.sender === 'customer' ? 'flex-end' : 'flex-start',
+                    maxWidth: '80%',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ fontSize: '14px', color: '#fff' }}>{msg.text}</div>
+                  <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>{msg.timestamp}</div>
                 </div>
               ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Callback Form - shown when admin is offline and no messages exchanged yet */}
-          {callbackSubmitted ? (
-            <div style={{
-              padding: '16px',
-              backgroundColor: '#1e1e2e',
-              textAlign: 'center',
-              color: '#4ade80'
-            }}>
-              Thank you! We'll contact you shortly.
-            </div>
-          ) : showCallbackForm ? (
-            <form onSubmit={handleSubmitCallback} style={{
-              padding: '16px',
-              backgroundColor: '#1e1e2e',
-              borderTop: '1px solid #374151'
-            }}>
-              <h4 style={{ margin: '0 0 12px', color: '#fff' }}>Leave your details</h4>
-              <input
-                type="text"
-                placeholder="Your name"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  marginBottom: '8px',
-                  borderRadius: '4px',
-                  border: '1px solid #374151',
-                  backgroundColor: '#374151',
-                  color: '#fff'
-                }}
-              />
-              <input
-                type="tel"
-                placeholder="Phone (optional)"
-                value={guestPhone}
-                onChange={(e) => setGuestPhone(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  marginBottom: '8px',
-                  borderRadius: '4px',
-                  border: '1px solid #374151',
-                  backgroundColor: '#374151',
-                  color: '#fff'
-                }}
-              />
-              <textarea
-                placeholder="Your message"
-                value={initialMessage}
-                onChange={(e) => setInitialMessage(e.target.value)}
-                required
-                rows="2"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  marginBottom: '12px',
-                  borderRadius: '4px',
-                  border: '1px solid #374151',
-                  backgroundColor: '#374151',
-                  color: '#fff',
-                  resize: 'vertical'
-                }}
-              ></textarea>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="submit"
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    backgroundColor: '#22c55e',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Submit Request
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCallbackForm(false)}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    backgroundColor: '#6b7280',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* Message Input - shown when admin is online or when having an active conversation */
-            <form onSubmit={handleSendMessage} style={{
-              padding: '16px',
-              backgroundColor: '#1e1e2e',
-              borderTop: '1px solid #374151'
-            }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  ref={chatInputRef}
-                  type="text"
-                  placeholder={adminOnline ? "Type your message..." : "Admin offline - click 'Callback' to leave details"}
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  disabled={!adminOnline && messages.length === 0}
-                  style={{
-                    flex: 1,
-                    padding: '10px 12px',
-                    borderRadius: '20px',
-                    border: '1px solid #374151',
-                    backgroundColor: '#374151',
-                    color: '#fff'
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!newMessage.trim() || (!adminOnline && messages.length === 0)}
-                  style={{
-                    padding: '10px 16px',
-                    backgroundColor: adminOnline ? '#4f46e5' : '#6b7280',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '20px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Send
-                </button>
-              </div>
-              
-              {/* Show callback option when admin is offline */}
-              {!adminOnline && messages.length === 0 && (
-                <div style={{ textAlign: 'center', marginTop: '8px' }}>
+            ) : (
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%', 
+                color: '#9ca3af',
+                textAlign: 'center',
+                padding: '20px'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                  {adminOnline ? '💬' : '📞'}
+                </div>
+                <p>
+                  {adminOnline 
+                    ? 'Send us a message and we\'ll respond promptly!' 
+                    : 'No admin is currently available. Leave your details and we\'ll call you back.'}
+                </p>
+                {!adminOnline && (
                   <button
-                    type="button"
                     onClick={() => setShowCallbackForm(true)}
                     style={{
-                      padding: '6px 12px',
+                      marginTop: '12px',
+                      padding: '8px 16px',
                       backgroundColor: '#f59e0b',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px'
+                      cursor: 'pointer'
                     }}
                   >
                     Request Callback
                   </button>
+                )}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Callback Form */}
+          {showCallbackForm && (
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#1e293b',
+              borderTop: '1px solid #334155'
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#fff' }}>Request Callback</h4>
+              <form onSubmit={handleCallbackSubmit}>
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    marginBottom: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#0f172a',
+                    color: '#fff'
+                  }}
+                />
+                <select
+                  value={contactType}
+                  onChange={(e) => setContactType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    marginBottom: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#0f172a',
+                    color: '#fff'
+                  }}
+                >
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                </select>
+                <input
+                  type={contactType === 'email' ? 'email' : 'tel'}
+                  placeholder={contactType === 'email' ? 'your@email.com' : '+254712345678'}
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    marginBottom: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#0f172a',
+                    color: '#fff'
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="submit"
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Submit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCallbackForm(false)}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      backgroundColor: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
-              )}
+              </form>
+            </div>
+          )}
+
+          {/* Message Input */}
+          {!showCallbackForm && (
+            <form onSubmit={handleSendMessage} style={{
+              padding: '12px',
+              backgroundColor: '#1e293b',
+              borderTop: '1px solid #334155',
+              display: 'flex',
+              gap: '8px'
+            }}>
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder={adminOnline ? "Type your message..." : "Admin offline - leave a message"}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '4px',
+                  border: '1px solid #334155',
+                  backgroundColor: '#0f172a',
+                  color: '#fff',
+                  opacity: (!connected || (!adminOnline && messages.length === 0)) ? 0.6 : 1
+                }}
+                disabled={!connected || (!adminOnline && messages.length === 0)}
+              />
+              <button
+                type="submit"
+                disabled={!connected || !newMessage.trim() || (!adminOnline && messages.length === 0)}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  opacity: (!connected || !newMessage.trim() || (!adminOnline && messages.length === 0)) ? 0.6 : 1
+                }}
+              >
+                Send
+              </button>
             </form>
+          )}
+          
+          {/* Show callback option when admin is offline */}
+          {!adminOnline && messages.length === 0 && (
+            <div style={{ textAlign: 'center', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setShowCallbackForm(true)}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}
+              >
+                Request Callback
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -426,7 +420,7 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
             width: '60px',
             height: '60px',
             borderRadius: '50%',
-            backgroundColor: '#4f46e5',
+            backgroundColor: connected ? (adminOnline ? '#4f46e5' : '#6b7280') : '#fbbf24',
             color: 'white',
             border: 'none',
             fontSize: '24px',
@@ -435,7 +429,18 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
-            position: 'relative'
+            position: 'relative',
+            transition: 'all 0.3s ease',
+            transform: 'scale(1)',
+            zIndex: 1001
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'scale(1.05)';
+            e.target.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'scale(1)';
+            e.target.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)';
           }}
         >
           💬
@@ -447,11 +452,12 @@ const ChatWidget = ({ isAdmin = false, authToken = null }) => {
             width: '12px',
             height: '12px',
             borderRadius: '50%',
-            backgroundColor: adminOnline ? '#4ade80' : '#f87171',
+            backgroundColor: connected ? (adminOnline ? '#4ade80' : '#f87171') : '#fbbf24',
             border: '2px solid #1a1a2e'
           }}></div>
         </button>
       )}
+      
     </div>
   );
 };

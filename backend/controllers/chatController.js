@@ -85,9 +85,19 @@ const chatController = {
         }
       ]);
 
+      // Format the conversation IDs consistently
+      const formattedConversations = conversations.map(conv => ({
+        conversationId: conv._id,
+        guestId: conv.guestId,
+        lastMessage: conv.lastMessage,
+        timestamp: conv.timestamp,
+        messageCount: conv.messageCount,
+        unreadCount: conv.unreadCount
+      }));
+
       res.json({
         success: true,
-        data: conversations
+        data: formattedConversations
       });
     } catch (error) {
       console.error('Error getting conversations:', error);
@@ -103,8 +113,18 @@ const chatController = {
     try {
       const { conversationId } = req.params;
       
+      // Handle both formats: 'conversation-guest-xxx' and 'guest-xxx'
+      let searchId = conversationId;
+      if (!conversationId.startsWith('conversation-')) {
+        if (conversationId.startsWith('guest-')) {
+          searchId = `conversation-${conversationId}`;
+        } else {
+          searchId = `conversation-guest-${conversationId}`;
+        }
+      }
+
       const messages = await ChatMessage.find({ 
-        conversationId 
+        conversationId: searchId
       }).sort({ createdAt: 1 });
 
       res.json({
@@ -125,8 +145,18 @@ const chatController = {
     try {
       const { conversationId } = req.params;
       
+      // Handle both formats: 'conversation-guest-xxx' and 'guest-xxx'
+      let searchId = conversationId;
+      if (!conversationId.startsWith('conversation-')) {
+        if (conversationId.startsWith('guest-')) {
+          searchId = `conversation-${conversationId}`;
+        } else {
+          searchId = `conversation-guest-${conversationId}`;
+        }
+      }
+
       await ChatMessage.updateMany(
-        { conversationId },
+        { conversationId: searchId },
         { read: true, readAt: new Date() }
       );
 
@@ -204,6 +234,69 @@ const chatController = {
       });
     }
   },
+
+  // Get admin status
+  getAdminStatus: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      
+      // Get the specific admin's availability setting
+      const adminAvailability = presenceManager.getAdminAvailability(userId);
+      
+      // Get overall system admin online status
+      const systemAdminOnline = presenceManager.isAnyAdminOnline();
+      
+      res.json({
+        success: true,
+        status: adminAvailability, // This admin's willingness to receive chats
+        adminOnline: systemAdminOnline, // Overall system availability
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error getting admin status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get admin status'
+      });
+    }
+  },
+
+  // Update admin status - This controls whether an admin is willing to receive chats
+  updateAdminStatus: async (req, res) => {
+    try {
+      const { status } = req.body;
+      const userId = req.user.id;
+      
+      if (typeof status !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          error: 'Status must be a boolean value'
+        });
+      }
+
+      // Update this admin's availability preference
+      presenceManager.setAdminAvailability(userId, status);
+      
+      // Broadcast the updated admin status to all visitors
+      const io = getIO();
+      io.to('public-chat').emit('admin:status', { online: presenceManager.isAnyAdminOnline() });
+
+      res.json({
+        success: true,
+        message: status 
+          ? 'You are now available to receive customer chats' 
+          : 'You are no longer available to receive customer chats',
+        status: status,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error updating admin status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update admin status'
+      });
+    }
+  }
 
 };
 

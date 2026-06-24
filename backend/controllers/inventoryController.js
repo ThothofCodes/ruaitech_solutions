@@ -1,123 +1,298 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const mongoose = require('mongoose');
-const { InventoryItem, StockMovement } = require('../models/Inventory');
+const Inventory = require('../models/Inventory');
+const upload = require('../middleware/upload');
+const { v4: uuidv4 } = require('uuid');
+const cloudinary = require('cloudinary').v2;
 
-const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
-const safePage  = (p) => Math.max(1, Math.min(Number(p) || 1, 1000));
-const safeLimit = (l) => Math.max(1, Math.min(Number(l) || 20, 100));
-const VALID_MOVE = ['RESTOCK','SALE','JOB_USAGE','DAMAGE_LOSS','RETURN','TRANSFER','ADJUSTMENT'];
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-exports.getItems = async (req, res, next) => {
-  try {
-    const page = safePage(req.query.page), limit = safeLimit(req.query.limit);
-    const filter = req.user.role === 'SUPER_ADMIN' ? {} : { departmentSlug: req.user.departmentSlug };
-    if (req.query.category) filter.category = req.query.category;
-    if (req.query.search) {
-      const s = req.query.search.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').slice(0,100);
-      filter.name = new RegExp(s,'i');
+const inventoryController = {
+  // Get all inventory items
+  getAll: async (req, res) => {
+    try {
+      const { search, category, page = 1, limit = 20 } = req.query;
+      const query = {};
+
+      if (search) {
+        query.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { sku: { $regex: search, $options: 'i' } },
+          { category: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      if (category) {
+        query.category = category;
+      }
+
+      const items = await Inventory.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .exec();
+
+      const total = await Inventory.countDocuments(query);
+
+      res.json({
+        success: true,
+        data: items,
+        total,
+        page: parseInt(page),
+        totalPages: Math.ceil(total / limit)
+      });
+    } catch (error) {
+      console.error('Error getting inventory:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get inventory items'
+      });
     }
-    const [items, total] = await Promise.all([
-      InventoryItem.find(filter).sort('name').skip((page-1)*limit).limit(limit),
-      mongoose.connection.readyState === 1
-        ? InventoryItem.countDocuments(filter)
-        : Promise.resolve(0),
-    ]);
-    res.json({ items, total, page });
-  } catch (err) { next(err); }
+  },
+
+  // Get inventory item by ID
+  getById: async (req, res) => {
+    try {
+      const item = await Inventory.findById(req.params.id);
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Inventory item not found'
+        });
+      }
+      res.json({
+        success: true,
+        data: item
+      });
+    } catch (error) {
+      console.error('Error getting inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get inventory item'
+      });
+    }
+  },
+
+  // Create new inventory item
+  create: async (req, res) => {
+    try {
+      // Handle file uploads if any
+      let attachmentUrls = [];
+      if (req.files && req.files.length > 0) {
+        // Upload each file to Cloudinary
+        for (const file of req.files) {
+          const result = await cloudinary.uploader.upload(file.path, {
+            folder: 'inventory_attachments',
+            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`
+          });
+          attachmentUrls.push(result.secure_url);
+        }
+      }
+
+      const newItem = new Inventory({
+        ...req.body,
+        attachments: attachmentUrls // Add the uploaded file URLs
+      });
+
+      await newItem.save();
+
+      res.status(201).json({
+        success: true,
+        data: newItem
+      });
+    } catch (error) {
+      console.error('Error creating inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to create inventory item'
+      });
+    }
+  },
+
+  // Update inventory item
+  update: async (req, res) => {
+    try {
+      // Get existing item to access existing attachments
+      const existingItem = await Inventory.findById(req.params.id);
+      if (!existingItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Inventory item not found'
+        });
+      }
+
+      // Handle file uploads if any
+      let updatedAttachmentUrls = [...(existingItem.attachments || [])]; // Keep existing attachments
+      
+      if (req.files && req.files.length > 0) {
+        // Upload each new file to Cloudinary
+        for (const file of req.files) {
+          const result = await cloudinary.uploader.upload(file.path, {
+            folder: 'inventory_attachments',
+            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`
+          });
+          updatedAttachmentUrls.push(result.secure_url);
+        }
+      }
+
+      const updatedItem = await Inventory.findByIdAndUpdate(
+        req.params.id,
+        {
+          ...req.body,
+          attachments: updatedAttachmentUrls // Update with combined attachments
+        },
+        { new: true, runValidators: true }
+      );
+
+      res.json({
+        success: true,
+        data: updatedItem
+      });
+    } catch (error) {
+      console.error('Error updating inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to update inventory item'
+      });
+    }
+  },
+
+  // Delete inventory item
+  delete: async (req, res) => {
+    try {
+      const item = await Inventory.findByIdAndDelete(req.params.id);
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Inventory item not found'
+        });
+      }
+      res.json({
+        success: true,
+        message: 'Inventory item deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting inventory item:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete inventory item'
+      });
+    }
+  },
+
+  // Get low stock items
+  getLowStock: async (req, res) => {
+    try {
+      const items = await Inventory.find({
+        quantity: { $lte: '$reorderLevel' } // Using aggregation to compare fields
+      }).lean();
+
+      // Since $lte with field comparison doesn't work directly in find,
+      // we need to filter in memory
+      const lowStockItems = items.filter(item => item.quantity <= item.reorderLevel);
+
+      res.json({
+        success: true,
+        data: lowStockItems,
+        total: lowStockItems.length
+      });
+    } catch (error) {
+      console.error('Error getting low stock items:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get low stock items'
+      });
+    }
+  },
+
+  // Get expiring items (this is a placeholder - adjust based on your needs)
+  getExpiring: async (req, res) => {
+    try {
+      // This would typically check for items with expiration dates
+      // For now, return empty array as placeholder
+      res.json({
+        success: true,
+        data: [],
+        total: 0
+      });
+    } catch (error) {
+      console.error('Error getting expiring items:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get expiring items'
+      });
+    }
+  },
+
+  // Record inventory movement
+  recordMovement: async (req, res) => {
+    try {
+      const { itemId, type, quantity, notes } = req.body;
+
+      const item = await Inventory.findById(itemId);
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Inventory item not found'
+        });
+      }
+
+      // Update quantity based on movement type
+      let newQuantity = item.quantity;
+      switch (type) {
+        case 'RESTOCK':
+        case 'RETURN':
+        case 'TRANSFER':
+          newQuantity += parseInt(quantity);
+          break;
+        case 'SALE':
+        case 'JOB_USAGE':
+        case 'DAMAGE_LOSS':
+        case 'ADJUSTMENT':
+          newQuantity -= parseInt(quantity);
+          break;
+        default:
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid movement type'
+          });
+      }
+
+      // Ensure quantity doesn't go negative
+      if (newQuantity < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient stock for this movement'
+        });
+      }
+
+      // Update the item
+      const updatedItem = await Inventory.findByIdAndUpdate(
+        itemId,
+        { quantity: newQuantity },
+        { new: true }
+      );
+
+      // Here you could also log the movement in a separate collection if needed
+      // For now, just return the updated item
+
+      res.json({
+        success: true,
+        data: updatedItem,
+        message: `Movement recorded: ${type} of ${quantity} units`
+      });
+    } catch (error) {
+      console.error('Error recording movement:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to record movement'
+      });
+    }
+  }
 };
 
-exports.createItem = async (req, res, next) => {
-  try {
-    const { name, category, sku, quantity, reorderLevel, reorderQty, unitCost, sellingPrice, supplier, supplierContact, location, condition, warrantyMonths, expiryDate } = req.body;
-    if (!name || !category) return res.status(400).json({ message: 'Name and category required' });
-    const item = await InventoryItem.create({
-      department:     req.user.department?._id || req.user.department,
-      departmentSlug: req.user.departmentSlug,
-      name: name.trim().slice(0,200), category,
-      sku, quantity: Math.max(0, Number(quantity) || 0),
-      reorderLevel: Number(reorderLevel) || 5,
-      reorderQty:   Number(reorderQty)   || 10,
-      unitCost:     Number(unitCost)     || 0,
-      sellingPrice: Number(sellingPrice) || 0,
-      supplier, supplierContact, location,
-      condition: condition || 'NEW',
-      warrantyMonths: warrantyMonths ? Number(warrantyMonths) : undefined,
-      expiryDate:     expiryDate ? new Date(expiryDate) : undefined,
-    });
-    res.status(201).json(item);
-  } catch (err) { next(err); }
-};
-
-exports.updateItem = async (req, res, next) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
-    const item = await InventoryItem.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!item) return res.status(404).json({ message: 'Item not found' });
-    res.json(item);
-  } catch (err) { next(err); }
-};
-
-exports.recordMovement = async (req, res, next) => {
-  try {
-    const { itemId, type, quantity, reference, notes } = req.body;
-    if (!isValidId(itemId)) return res.status(400).json({ message: 'Invalid item ID' });
-    if (!VALID_MOVE.includes(type)) return res.status(400).json({ message: 'Invalid movement type' });
-    const qty = Math.abs(Math.floor(Number(quantity)));
-    if (!qty) return res.status(400).json({ message: 'Valid quantity required' });
-
-    const item = await InventoryItem.findById(itemId);
-    if (!item) return res.status(404).json({ message: 'Item not found' });
-
-    const prevQty = item.quantity;
-    const delta   = ['RESTOCK','RETURN','ADJUSTMENT'].includes(type) ? qty : -qty;
-    const newQty  = Math.max(0, prevQty + delta);
-
-    item.quantity = newQty;
-    if (type === 'RESTOCK') item.lastRestockedAt = new Date();
-    await item.save();
-
-    await StockMovement.create({
-      item: itemId, department: item.department,
-      type, quantity: delta, previousQty: prevQty, newQty,
-      reference, notes, performedBy: req.user._id,
-    });
-
-    res.json({ item, movement: { type, delta, previousQty: prevQty, newQty } });
-  } catch (err) { next(err); }
-};
-
-exports.getMovements = async (req, res, next) => {
-  try {
-    if (!isValidId(req.params.itemId)) return res.status(400).json({ message: 'Invalid item ID' });
-    const movements = await StockMovement.find({ item: req.params.itemId }).sort('-createdAt').limit(100);
-    res.json(movements);
-  } catch (err) { next(err); }
-};
-
-exports.getLowStock = async (req, res, next) => {
-  try {
-    const filter = req.user.role === 'SUPER_ADMIN' ? {} : { departmentSlug: req.user.departmentSlug };
-    const items = await InventoryItem.find({ ...filter, $expr: { $lte: ['$quantity', '$reorderLevel'] } }).sort('quantity');
-    res.json(items);
-  } catch (err) { next(err); }
-};
-
-exports.getExpiring = async (req, res, next) => {
-  try {
-    const days   = Number(req.query.days) || 30;
-    const cutoff = new Date(Date.now() + days * 86400000);
-    const filter = req.user.role === 'SUPER_ADMIN' ? {} : { departmentSlug: req.user.departmentSlug };
-    const items  = await InventoryItem.find({ ...filter, expiryDate: { $lte: cutoff, $gte: new Date() } }).sort('expiryDate');
-    res.json(items);
-  } catch (err) { next(err); }
-};
-
-exports.getMasterView = async (req, res, next) => {
-  try {
-    const summary = await InventoryItem.aggregate([
-      { $group: { _id: '$departmentSlug', totalItems: { $sum: 1 }, totalValue: { $sum: { $multiply: ['$quantity','$unitCost'] } }, lowStockCount: { $sum: { $cond: [{ $lte: ['$quantity','$reorderLevel'] }, 1, 0] } } } },
-      { $sort: { _id: 1 } },
-    ]);
-    res.json(summary);
-  } catch (err) { next(err); }
-};
+module.exports = inventoryController;

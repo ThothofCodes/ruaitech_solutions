@@ -17,6 +17,9 @@ const UserSchema = new mongoose.Schema({
   superAdminLocked: { type: Boolean, default: false }, // prevents modification via standard endpoint
   isActive: { type: Boolean, default: true },
   lastLogin: Date,
+  isEmailVerified: { type: Boolean, default: false }, // Track if email is verified
+  passwordResetToken: { type: String, default: null }, // For password reset/initial setup
+  tokenExpiry: { type: Date, default: null }, // Token expiry for password reset
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

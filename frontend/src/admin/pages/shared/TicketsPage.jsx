@@ -24,6 +24,8 @@ export default function TicketsPage({ color = '#00d4ff' }) {
   const [priority, setPriority] = useState('');
   const [detail, setDetail]     = useState(null);
   const [reply, setReply]       = useState('');
+  const [workflowStages, setWorkflowStages] = useState(['Diagnostics', 'Parts Ordered', 'In Repair', 'QA', 'Ready']);
+  const [selectedStage, setSelectedStage] = useState('');
 
   // Real-time: update ticket thread when a reply arrives
   const { emit } = useSocket({
@@ -36,6 +38,19 @@ export default function TicketsPage({ color = '#00d4ff' }) {
       // Also refresh the list badge counts
       load();
     },
+    'ticket:status-update': (updatedTicket) => {
+      // Update the ticket in the list when status changes
+      setTickets(prevTickets => 
+        prevTickets.map(ticket => 
+          ticket._id === updatedTicket._id ? updatedTicket : ticket
+        )
+      );
+      
+      // If we're viewing the updated ticket, update the detail view
+      if (detail && detail._id === updatedTicket._id) {
+        setDetail(updatedTicket);
+      }
+    }
   });
 
   // Join/leave ticket room when detail panel opens/closes
@@ -61,12 +76,26 @@ export default function TicketsPage({ color = '#00d4ff' }) {
   useEffect(() => { load(); }, [load]);
 
   const updateStatus = async (id, status) => {
-    try { await api.patch(`/tickets/${id}/status`, { status }); toast.success(`Status → ${status}`); load(); setDetail(null); }
+    try { 
+      await api.patch(`/tickets/${id}/status`, { status }); 
+      toast.success(`Status → ${status}`);
+      // Emit socket event to notify other users
+      emit('ticket:status-update', { _id: id, status });
+      load(); 
+      setDetail(null); 
+    }
     catch (err) { toast.error(err.response?.data?.message || 'Error'); }
   };
 
   const escalate = async (id) => {
-    try { await api.post(`/tickets/${id}/escalate`); toast.success('Escalated to Super Admin'); load(); setDetail(null); }
+    try { 
+      await api.post(`/tickets/${id}/escalate`); 
+      toast.success('Escalated to Super Admin'); 
+      // Emit socket event to notify other users
+      emit('ticket:status-update', { _id: id, status: 'ESCALATED' });
+      load(); 
+      setDetail(null); 
+    }
     catch { toast.error('Failed to escalate'); }
   };
 
@@ -79,6 +108,75 @@ export default function TicketsPage({ color = '#00d4ff' }) {
       const { data } = await api.get(`/tickets/${detail._id}`);
       setDetail(data);
     } catch { toast.error('Failed to send reply'); }
+  };
+
+  // Function to send SMS notification to customer
+  const sendSMSNotification = async (ticketId, message) => {
+    try {
+      await api.post(`/tickets/${ticketId}/notify`, { 
+        message, 
+        channel: 'sms' 
+      });
+      toast.success('SMS notification sent');
+    } catch (err) {
+      toast.error('Failed to send SMS notification');
+    }
+  };
+
+  // Function to send WhatsApp notification to customer
+  const sendWhatsAppNotification = async (ticketId, message) => {
+    try {
+      await api.post(`/tickets/${ticketId}/notify`, { 
+        message, 
+        channel: 'whatsapp' 
+      });
+      toast.success('WhatsApp notification sent');
+    } catch (err) {
+      toast.error('Failed to send WhatsApp notification');
+    }
+  };
+
+  // Function to advance ticket through workflow stages
+  const advanceWorkflow = async (ticketId, newStage) => {
+    try {
+      // Update ticket status based on workflow stage
+      let newStatus = 'IN_PROGRESS';
+      switch(newStage) {
+        case 'Diagnostics':
+          newStatus = 'IN_PROGRESS';
+          break;
+        case 'Parts Ordered':
+          newStatus = 'AWAITING_CLIENT';
+          break;
+        case 'In Repair':
+          newStatus = 'IN_PROGRESS';
+          break;
+        case 'QA':
+          newStatus = 'IN_PROGRESS';
+          break;
+        case 'Ready':
+          newStatus = 'AWAITING_CLIENT';
+          break;
+        default:
+          newStatus = 'IN_PROGRESS';
+      }
+      
+      await api.patch(`/tickets/${ticketId}/status`, { status: newStatus });
+      toast.success(`Ticket advanced to ${newStage} stage`);
+      
+      // Emit socket event to notify other users
+      emit('ticket:status-update', { _id: ticketId, status: newStatus });
+      
+      // Send notification to customer
+      const message = `Your repair ticket #${ticketId.substring(0, 8)} has been updated to ${newStage} stage.`;
+      await sendSMSNotification(ticketId, message);
+      await sendWhatsAppNotification(ticketId, message);
+      
+      load();
+      setDetail(null);
+    } catch (err) {
+      toast.error('Failed to advance workflow');
+    }
   };
 
   const STATUSES = ['','OPEN','IN_PROGRESS','AWAITING_CLIENT','ESCALATED','RESOLVED','CLOSED','REOPENED'];
@@ -199,6 +297,28 @@ export default function TicketsPage({ color = '#00d4ff' }) {
               Send Reply
             </button>
 
+            {/* Workflow Stage Selector for Hardware Repair */}
+            <div style={{ marginBottom:'1rem' }}>
+              <div style={{ fontSize:10, color:'#4a6a8a', letterSpacing:'0.08em', marginBottom:8, textTransform:'uppercase' }}>Hardware Repair Workflow</div>
+              <select 
+                value={selectedStage} 
+                onChange={e => setSelectedStage(e.target.value)}
+                style={{ width:'100%', padding:'0.45rem 0.75rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:12, outline:'none' }}
+              >
+                <option value="">Select stage to advance...</option>
+                {workflowStages.map(stage => (
+                  <option key={stage} value={stage}>{stage}</option>
+                ))}
+              </select>
+              {selectedStage && (
+                <button 
+                  onClick={() => advanceWorkflow(detail._id, selectedStage)}
+                  style={{ width:'100%', padding:'0.5rem', background:'#00d4ff', color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer', marginTop:8 }}>
+                  Advance to {selectedStage}
+                </button>
+              )}
+            </div>
+
             {/* Status Actions */}
             <div style={{ fontSize:10, color:'#4a6a8a', letterSpacing:'0.08em', marginBottom:8, textTransform:'uppercase' }}>Actions</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -215,6 +335,15 @@ export default function TicketsPage({ color = '#00d4ff' }) {
                   ESCALATE
                 </button>
               )}
+              {/* Notification buttons */}
+              <button onClick={() => sendSMSNotification(detail._id, `Your ticket #${detail.ticketId} has been updated.`)}
+                style={{ padding:'4px 10px', background:'#00ff8822', color:'#00ff88', border:'1px solid #00ff8844', borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700 }}>
+                SMS Notify
+              </button>
+              <button onClick={() => sendWhatsAppNotification(detail._id, `Your ticket #${detail.ticketId} has been updated.`)}
+                style={{ padding:'4px 10px', background:'#00d4ff22', color:'#00d4ff', border:'1px solid #00d4ff44', borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700 }}>
+                WhatsApp Notify
+              </button>
             </div>
           </div>
         </div>

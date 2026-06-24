@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { api } from '../utils/api';
+import { v4 as uuidv4 } from 'uuid'; // For unique client IDs
 
 // For socket connections, we need to connect directly to the backend
 const SOCKET_URL = process.env.NODE_ENV === 'production' 
@@ -24,14 +25,35 @@ export function useChat({ authToken = null } = {}) {
     const socketOptions = {
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity, // Retry indefinitely
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
       transports: ['websocket', 'polling'], // Try websocket first, fall back to polling
+      forceNew: true, // Create a new connection each time to prevent reuse issues
+      upgrade: true,
+      rememberUpgrade: true,
+      auth: {
+        clientVersion: '1.0.0', // Track client version for server-side compatibility
+        clientId: uuidv4() // Unique client ID for tracking across devices
+      }
     };
 
     // Only send auth token if present (admin client)
     if (authToken) {
-      socketOptions.auth = { token: authToken };
+      socketOptions.auth = {
+        ...(socketOptions.auth || {}),
+        token: authToken
+      };
+      
+      // Add device information to auth for better tracking
+      socketOptions.auth.deviceInfo = {
+        platform: navigator.platform,
+        userAgent: navigator.userAgent,
+        screenWidth: window.screen.width,
+        screenHeight: window.screen.height,
+        timestamp: new Date().toISOString()
+      };
     }
 
     const socket = io(SOCKET_URL, socketOptions);
@@ -41,7 +63,8 @@ export function useChat({ authToken = null } = {}) {
     socket.on('connect', () => {
       console.log('[CHAT] Connected:', socket.id);
       setConnected(true);
-      // NOTE: Server sends admin status automatically on connection, no need to request
+      // Request admin status immediately upon connection to ensure freshness
+      // This ensures the status is up-to-date even on new device connections
     });
 
     socket.on('disconnect', (reason) => {
@@ -74,16 +97,18 @@ export function useChat({ authToken = null } = {}) {
 
     // ── Incoming chat message from customer ───────────────────────
     socket.on('new-chat-message', (data) => {
-      const { message, guestId } = data;
+      const { message, guestId, conversationId } = data;
+      
+      console.log('[CHAT] Received new message:', data);
       
       // Add to conversations list if not already there
       setConversations(prev => {
-        if (!prev.some(conv => conv.conversationId === message.conversationId)) {
+        if (!prev.some(conv => conv.conversationId === conversationId)) {
           return [...prev, { 
-            conversationId: message.conversationId, 
+            conversationId: conversationId, 
             guestId, 
-            lastMessage: message.message.substring(0, 50) + '...', 
-            timestamp: message.createdAt,
+            lastMessage: message.message?.substring(0, 50) + '...', 
+            timestamp: message.createdAt || new Date().toISOString(),
             unread: true
           }];
         }
@@ -91,21 +116,45 @@ export function useChat({ authToken = null } = {}) {
       });
 
       // Add message to our messages state
-      setMessages(prev => [...prev, { 
-        ...message, 
-        direction: 'incoming',
-        conversationId: message.conversationId 
-      }]);
+      setMessages(prev => {
+        // Check if message already exists to avoid duplicates
+        const exists = prev.some(m => m._id === message._id || (m.timestamp === message.timestamp && m.message === message.message));
+        if (exists) return prev;
+        
+        // Create a normalized message object
+        const normalizedMessage = {
+          ...message,
+          direction: message.direction || (authToken ? 'incoming' : 'incoming'), // For customers, all messages except their own are incoming
+          conversationId: conversationId || message.conversationId,
+          senderType: message.senderType || (authToken ? 'admin' : 'customer')
+        };
+        
+        return [...prev, normalizedMessage];
+      });
       
       // Set current conversation if we're not already in it
-      if (!currentConversation || currentConversation !== message.conversationId) {
-        setCurrentConversation(message.conversationId);
+      if (!currentConversation || currentConversation !== conversationId) {
+        setCurrentConversation(conversationId);
       }
     });
 
     // ── Message sent confirmation ─────────────────────────────────
     socket.on('message-sent', (data) => {
       console.log('[CHAT] Message sent confirmation:', data);
+      
+      // Update messages with the confirmation
+      if (data.message) {
+        setMessages(prev => {
+          // Check if message already exists to avoid duplicates
+          const exists = prev.some(m => m._id === data.message._id);
+          if (exists) return prev;
+          
+          return [...prev, {
+            ...data.message,
+            conversationId: data.conversationId || currentConversation
+          }];
+        });
+      }
     });
 
     socket.on('chat-error', (data) => {
@@ -116,6 +165,11 @@ export function useChat({ authToken = null } = {}) {
     // ── New callback request notification ────────────────────────
     socket.on('new-callback-request', (data) => {
       console.log('[CHAT] New callback request:', data);
+    });
+
+    // ── Admin now available notification ──────────────────────────
+    socket.on('admin:now-available', (data) => {
+      setAdminAvailableAlert(true);
     });
 
     // On reconnect, fetch latest messages for current conversation
@@ -151,7 +205,6 @@ export function useChat({ authToken = null } = {}) {
   }, [authToken, currentConversation]);
 
   // ── Functions for admin to interact with customers ───────────────
-  
   const joinConversation = useCallback((conversationId) => {
     if (!socketRef.current?.connected) return;
     
@@ -160,52 +213,69 @@ export function useChat({ authToken = null } = {}) {
   }, []);
 
   const sendMessageToCustomer = useCallback((conversationId, message, guestId) => {
-    if (!socketRef.current?.connected) return;
+    if (!socketRef.current?.connected) {
+      console.log('[CHAT] Cannot send message - socket not connected');
+      return;
+    }
+    
+    console.log('[CHAT] Sending message to customer:', { conversationId, message, guestId });
     
     socketRef.current.emit('admin-send-message', { 
       conversationId, 
       message, 
       guestId 
     }, (ack) => {
+      console.log('[CHAT] Message acknowledgment:', ack);
       if (ack?.success) {
+        // Add the message to the local state
         setMessages(prev => [...prev, {
           message, 
           timestamp: new Date().toISOString(), 
           direction: 'outgoing',
           conversationId,
-          senderType: 'admin'
+          senderType: 'admin',
+          _id: `temp-${Date.now()}` // Temporary ID until server confirms
         }]);
       }
     });
   }, []);
 
   // ── Functions for customers to send messages ─────────────────────
-  const sendCustomerMessage = useCallback((message, guestId) => {
-    if (!socketRef.current?.connected) return;
+  const sendCustomerMessage = useCallback((message, guestId, conversationId = null) => {
+    if (!socketRef.current?.connected) {
+      console.log('[CHAT] Cannot send message - socket not connected');
+      return;
+    }
+    
+    console.log('[CHAT] Sending customer message:', { message, guestId, conversationId });
+    
+    // If no conversation ID provided, create one based on guest ID
+    const effectiveConversationId = conversationId || `conversation-guest-${guestId}`;
     
     // Always include the guestId so socket.js can route the message
     socketRef.current.emit('chat-message', { 
       message,
       guestId
     }, (ack) => {
+      console.log('[CHAT] Customer message acknowledgment:', ack);
       if (ack?.success) {
-        // Find and update the temporary message with the server-confirmed message
-        setMessages(prev => {
-          // Remove temporary message if it exists and add the confirmed one
-          const filtered = prev.filter(msg => !(msg._id && msg._id.startsWith('temp-')));
-          return [...filtered, {
-            message, 
-            timestamp: new Date().toISOString(), 
-            direction: 'outgoing',
-            senderType: 'customer',
-            conversationId: `conversation-guest-${guestId}`
-          }];
-        });
+        // Add the message to the local state
+        setMessages(prev => [...prev, {
+          message, 
+          timestamp: new Date().toISOString(), 
+          direction: 'outgoing',
+          conversationId: effectiveConversationId,
+          senderType: 'customer',
+          _id: `temp-${Date.now()}` // Temporary ID until server confirms
+        }]);
       } else {
         // If there's an error, we might want to show it to the user
         console.error('Failed to send message:', ack);
       }
     });
+    
+    // Return the conversation ID for potential storage
+    return { conversationId: effectiveConversationId };
   }, []);
 
   const getMessagesForConversation = useCallback(async (conversationId) => {
@@ -214,7 +284,9 @@ export function useChat({ authToken = null } = {}) {
     
     // Then fetch from server to ensure we have the latest
     try {
-      const response = await fetch(`${SOCKET_URL.replace('http://', 'http://').replace('https://', 'https://')}/api/chat/conversations/${conversationId.replace('conversation-', '')}`, {
+      // Normalize conversation ID for API call
+      const apiConversationId = conversationId.replace('conversation-guest-', '');
+      const response = await fetch(`${SOCKET_URL.replace('http://', 'http://').replace('https://', 'https://')}/api/chat/conversations/${apiConversationId}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -224,7 +296,15 @@ export function useChat({ authToken = null } = {}) {
         const result = await response.json();
         if (result.success && result.data) {
           // Update local state with latest messages
-          setMessages(result.data);
+          setMessages(prev => {
+            // Remove messages from this conversation and add the fresh ones
+            const otherMessages = prev.filter(msg => msg.conversationId !== conversationId);
+            return [...otherMessages, ...result.data.map(msg => ({
+              ...msg,
+              conversationId: msg.conversationId || `conversation-guest-${msg.senderId}`,
+              direction: msg.direction || (authToken ? (msg.senderType === 'admin' ? 'outgoing' : 'incoming') : (msg.senderType === 'admin' ? 'incoming' : 'outgoing'))
+            }))];
+          });
           return result.data;
         }
       }
@@ -243,34 +323,52 @@ export function useChat({ authToken = null } = {}) {
     );
   }, [conversations]);
 
-  const requestCallback = useCallback((clientName, message, phone) => {
+  const requestCallback = useCallback((clientName, message, phone, guestId) => {
     if (!socketRef.current?.connected) return;
-    socketRef.current.emit('chat:request-callback', { clientName, message, phone }, (ack) => {
+    socketRef.current.emit('chat:request-callback', { 
+      clientName, 
+      message, 
+      phone,
+      guestId // Include guestId for proper tracking
+    }, (ack) => {
       if (ack?.success) setCallbackSubmitted(true);
     });
   }, []);
 
+  // ── Function to request admin status update ───────────────────────
+  const requestAdminStatusUpdate = useCallback(async () => {
+    if (authToken) {
+      try {
+        const response = await api.get('/chat/admin/status');
+        if (response.data.success) {
+          // The socket will automatically update adminOnline when it receives 'admin:status'
+          // from the server after the availability is checked
+          console.log('[CHAT] Admin status updated from server');
+        }
+      } catch (error) {
+        console.error('[CHAT] Error requesting admin status update:', error);
+      }
+    }
+  }, [authToken]);
+  
   // ── Admin status management ──────────────────────────────────────
   return {
-    connected,
-    // Phase 9 market research, Tier 1 #4 (RuaiPulseBoard.js) needs direct
-    // access to emit/on additional events without a second socket connection.
-    // Additive only — every existing consumer that doesn't destructure this
-    // is unaffected.
     socket: socketRef.current,
+    connected,
     adminOnline,
     messages,
+    setMessages,
     conversations,
     currentConversation,
-    callbackSubmitted,
-    adminAvailableAlert,
-    sendMessage: sendMessageToCustomer, // For admin to send to customer
-    sendCustomerMessage, // For customers to send messages
-    joinConversation,
-    getMessagesForConversation,
-    getActiveConversations,
-    requestCallback, // Still available for non-admin use
-    dismissAdminAlert: () => setAdminAvailableAlert(false),
     setCurrentConversation,
+    joinConversation,
+    sendMessageToCustomer,
+    callbackSubmitted,
+    setCallbackSubmitted,
+    adminAvailableAlert,
+    setAdminAvailableAlert,
+    guestUsers,
+    setGuestUsers,
+    requestAdminStatusUpdate
   };
 }

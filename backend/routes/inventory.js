@@ -1,17 +1,25 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const router = require('express').Router();
-const ctrl   = require('../controllers/inventoryController');
-const { protect, staffGuard, deptHeadGuard, superAdminGuard } = require('../middleware/auth');
+const express = require('express');
+const router = express.Router();
+const inventoryController = require('../controllers/inventoryController');
+const { upload } = require('../middleware/upload'); // Destructure the upload object
+const { protect, authorize } = require('../middleware/auth');
 
-router.use(protect, staffGuard);
+// Apply auth protection to all routes
+router.use(protect);
 
-router.get('/',              ctrl.getItems);
-router.post('/',             deptHeadGuard, ctrl.createItem);
-router.patch('/:id',         deptHeadGuard, ctrl.updateItem);
-router.post('/movements',    ctrl.recordMovement);
-router.get('/low-stock',     ctrl.getLowStock);
-router.get('/expiring',      ctrl.getExpiring);
-router.get('/master',        superAdminGuard, ctrl.getMasterView);
-router.get('/movements/:itemId', ctrl.getMovements);
+// Routes that don't require specific permissions
+router.get('/', inventoryController.getAll);
+router.get('/low-stock', inventoryController.getLowStock);
+router.get('/expiring', inventoryController.getExpiring);
+router.get('/:id', inventoryController.getById);
+
+// Routes that require specific permissions
+router.post('/', authorize(['admin', 'SUPER_ADMIN', 'STAFF']), upload.array('attachments', 5), inventoryController.create);
+router.patch('/:id', authorize(['admin', 'SUPER_ADMIN', 'STAFF']), upload.array('attachments', 5), inventoryController.update);
+router.delete('/:id', authorize(['admin', 'SUPER_ADMIN']), inventoryController.delete);
+
+// Inventory movements
+router.post('/movements', authorize(['admin', 'SUPER_ADMIN', 'STAFF']), inventoryController.recordMovement);
 
 module.exports = router;

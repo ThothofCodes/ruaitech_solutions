@@ -34,23 +34,72 @@ exports.getProducts = async (req, res, next) => {
   try {
     const page = safePage(req.query.page), limit = safeLimit(req.query.limit);
     const sort = VALID_SORT.includes(req.query.sort) ? req.query.sort : '-createdAt';
-    const query = { isActive: true };
-    if (req.query.category && VALID_CATS.includes(req.query.category)) query.category = req.query.category;
-    if (req.query.featured === 'true') query.featured = true;
+    let query = { isActive: true };
+    
+    // Handle featured products request
+    if (req.query.featured === 'true') {
+      query.featured = true;
+    }
+    
+    // Handle search query
     if (req.query.search) {
       const safe = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0,100);
-      query.$or = [{ name: new RegExp(safe,'i') }, { tags: new RegExp(safe,'i') }];
+      query.$or = [
+        { name: { $regex: safe, $options: 'i' } },
+        { description: { $regex: safe, $options: 'i' } },
+        { shortDesc: { $regex: safe, $options: 'i' } },
+        { tags: { $in: [new RegExp(safe, 'i')] } }
+      ];
     }
-    if (req.query.minPrice || req.query.maxPrice) {
-      query.price = {};
-      if (req.query.minPrice) query.price.$gte = Math.max(0, Number(req.query.minPrice));
-      if (req.query.maxPrice) query.price.$lte = Math.min(10_000_000, Number(req.query.maxPrice));
-    }
+    
     const [products, total] = await Promise.all([
-      Product.find(query).sort(sort).skip((page-1)*limit).limit(limit),
-      Product.countDocuments(query),
+      Product.find(query)
+        .sort(sort)
+        .limit(limit)
+        .skip((page - 1) * limit),
+      Product.countDocuments(query)
     ]);
-    res.json({ products, total, page, pages: Math.ceil(total/limit) });
+    
+    res.json({
+      products,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) { next(err); }
+};
+
+exports.getById = async (req, res, next) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ message: 'Invalid product ID' });
+    const product = await Product.findById(req.params.id).where({ isActive: true });
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json(product);
+  } catch (err) { next(err); }
+};
+
+exports.getFeatured = async (req, res, next) => {
+  try {
+    const products = await Product.find({ isActive: true, featured: true }).limit(10);
+    res.json(products);
+  } catch (err) { next(err); }
+};
+
+exports.search = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ message: 'Search query required' });
+    
+    const safeQuery = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0,100);
+    const products = await Product.find({
+      isActive: true,
+      $or: [
+        { name: { $regex: safeQuery, $options: 'i' } },
+        { description: { $regex: safeQuery, $options: 'i' } },
+        { shortDesc: { $regex: safeQuery, $options: 'i' } },
+        { tags: { $in: [new RegExp(safeQuery, 'i')] } }
+      ]
+    }).limit(20);
+    
+    res.json(products);
   } catch (err) { next(err); }
 };
 

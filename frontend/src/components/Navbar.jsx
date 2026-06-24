@@ -41,6 +41,7 @@ export default function Navbar() {
           { to: '/calculator', label: 'Calculator' },
           { to: '/consult',    label: 'Consult'    },
           { to: '/services',   label: 'Services'   },
+          { to: '/help',       label: 'Help'       },
           { to: '/contact',    label: 'Contact'    },
         ].map(({ to, label }) => (
           <NavLink key={to} to={to} style={({ isActive }) => ({
@@ -133,6 +134,7 @@ export default function Navbar() {
           { to: '/calculator', label: 'Calculator' },
           { to: '/consult',    label: 'Consult'    },
           { to: '/services',   label: 'Services'   },
+          { to: '/help',       label: 'Help'       },
           { to: '/contact',    label: 'Contact'    },
         ].map(({ to, label }) => (
           <NavLink 

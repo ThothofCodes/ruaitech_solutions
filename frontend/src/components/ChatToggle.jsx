@@ -7,38 +7,45 @@ const ChatToggle = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showCallback, setShowCallback] = useState(false);
   const [customerName, setCustomerName] = useState('');
-  const [contact, setContact] = useState('');
   const [contactType, setContactType] = useState('email');
-  const [preferredTime, setPreferredTime] = useState('');
+  const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { 
-    adminOnline, 
-    requestCallback,
-    callbackSubmitted,
-    adminAvailableAlert
-  } = useChat();
+  const { adminOnline } = useChat();
 
   const handleCallbackSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!customerName || !contact || !preferredTime) {
+    if (!customerName.trim() || !contact.trim()) {
       toast.error('Please fill in all fields');
       return;
     }
 
     setLoading(true);
     try {
-      requestCallback(customerName, `Callback request: ${customerName} at ${preferredTime}. Contact: ${contact}`, contact);
-      toast.success('✅ Callback request submitted! We will contact you soon.');
-      setCustomerName('');
-      setContact('');
-      setContactType('email');
-      setPreferredTime('');
-      setShowCallback(false);
-      setIsOpen(false);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/chat/callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clientName: customerName,
+          message: `Callback requested: ${contactType} - ${contact}`,
+          phone: contactType === 'phone' ? contact : undefined
+        })
+      });
+
+      if (response.ok) {
+        toast.success('Callback request submitted successfully!');
+        setCustomerName('');
+        setContact('');
+        setShowCallback(false);
+        setIsOpen(false);
+      } else {
+        toast.error('Failed to submit callback request');
+      }
     } catch (error) {
-      toast.error('Error submitting callback request');
+      console.error('Error submitting callback request:', error);
+      toast.error('Failed to submit callback request');
     } finally {
       setLoading(false);
     }
@@ -46,8 +53,7 @@ const ChatToggle = () => {
 
   const handleChatClick = () => {
     if (adminOnline) {
-      // Open chat interface (would connect to existing ChatWidget or admin)
-      toast.info('Chat feature coming soon');
+      toast.info('Opening chat with admin...');
     } else {
       setShowCallback(true);
     }
@@ -135,51 +141,41 @@ const ChatToggle = () => {
                     color: 'var(--text-primary)',
                   }}
                 />
-                <input
-                  type="datetime-local"
-                  value={preferredTime}
-                  onChange={(e) => setPreferredTime(e.target.value)}
-                  required
-                  style={{
-                    padding: '10px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(0, 212, 255, 0.2)',
-                    background: 'var(--bg-void)',
-                    color: 'var(--text-primary)',
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    padding: '10px 16px',
-                    background: 'linear-gradient(135deg, var(--color-primary), #00a8cc)',
-                    color: 'var(--bg-void)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: 'bold',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.7 : 1,
-                  }}
-                >
-                  {loading ? '⏳ Submitting...' : '📞 Request Callback'}
-                </button>
-                {adminOnline && (
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    type="button"
-                    onClick={() => setShowCallback(false)}
+                    type="submit"
                     style={{
-                      padding: '10px 16px',
-                      background: 'transparent',
-                      color: 'var(--color-primary)',
-                      border: '1px solid var(--color-primary)',
+                      flex: 1,
+                      padding: '10px',
+                      background: 'linear-gradient(135deg, var(--color-primary), #00a8cc)',
+                      color: 'white',
+                      border: 'none',
                       borderRadius: '8px',
                       cursor: 'pointer',
                     }}
                   >
-                    💬 Back to Chat
+                    Submit
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCallback(false);
+                      setCustomerName('');
+                      setContact('');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid rgba(0, 212, 255, 0.2)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </form>
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -204,7 +200,13 @@ const ChatToggle = () => {
 
       {/* Floating Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) {
+            setIsOpen(true);
+          } else {
+            setIsOpen(false);
+          }
+        }}
         style={{
           position: 'relative',
           width: '60px',

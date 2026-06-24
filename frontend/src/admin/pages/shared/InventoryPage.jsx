@@ -21,7 +21,7 @@ const Input = ({ label, ...props }) => (
 
 export default function InventoryPage({ color = '#00d4ff' }) {
   const [items, setItems]       = useState([]);
-  const [total, setTotal]       = useState(0);
+  const [total, setItemsTotal]  = useState(0);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [tab, setTab]           = useState('items'); // items | low-stock | expiring
@@ -31,8 +31,11 @@ export default function InventoryPage({ color = '#00d4ff' }) {
   const [move, setMove]         = useState({ type:'RESTOCK', quantity:1, notes:'' });
   const [form, setForm]         = useState({
     name:'', category:'', sku:'', quantity:0, reorderLevel:5, reorderQty:10,
-    unitCost:0, sellingPrice:0, supplier:'', supplierContact:'', location:'', condition:'NEW',
+    unitCost:0, sellingPrice:0, supplier:'', supplierContact:'', location:'', condition:'NEW'
   });
+  const [attachments, setAttachments] = useState([]); // Store actual file objects
+  const [imagePreviews, setImagePreviews] = useState([]); // Store image previews
+  const [qrCode, setQrCode] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,27 +46,118 @@ export default function InventoryPage({ color = '#00d4ff' }) {
       const { data } = await api.get(url, { params });
       const arr = data.items || data;
       setItems(Array.isArray(arr) ? arr : []);
-      setTotal(data.total || arr.length);
+      setItemsTotal(data.total || arr.length);
     } catch { toast.error('Failed to load inventory'); }
     finally { setLoading(false); }
   }, [tab, search]);
 
   useEffect(() => { load(); }, [load]);
 
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // Process each selected file
+    const newPreviews = [];
+    const newFiles = [...attachments]; // Keep existing files
+    
+    files.forEach(file => {
+      // Add the file to our attachments list
+      newFiles.push(file);
+      
+      // Create preview for the image
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newPreviews.push(reader.result);
+        setImagePreviews(prev => [...prev, ...newPreviews]); // Update previews
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    setAttachments(newFiles);
+  };
+
+  const removeAttachment = (index) => {
+    const newAttachments = [...attachments];
+    newAttachments.splice(index, 1);
+    setAttachments(newAttachments);
+    
+    const newPreviews = [...imagePreviews];
+    newPreviews.splice(index, 1);
+    setImagePreviews(newPreviews);
+  };
+
+  const generateQRCode = async (itemId) => {
+    try {
+      // This would typically connect to a QR code generation service
+      // For now, we'll simulate it with a placeholder
+      const qrCodeUrl = `/api/qrcode/${itemId}`;
+      setQrCode(qrCodeUrl);
+      setForm(prev => ({
+        ...prev,
+        qrCodeUrl: qrCodeUrl
+      }));
+      toast.success('QR code generated');
+    } catch (err) {
+      toast.error('Failed to generate QR code');
+    }
+  };
+
   const submitItem = async (e) => {
     e.preventDefault();
+    
     try {
+      const formData = new FormData();
+      
+      // Add form fields to FormData
+      Object.keys(form).forEach(key => {
+        if (form[key] !== undefined && form[key] !== null) {
+          formData.append(key, form[key]);
+        }
+      });
+      
+      // Add attachment files to FormData
+      attachments.forEach((file, index) => {
+        formData.append('attachments', file);
+      });
+
       if (selected) {
-        await api.patch(`/inventory/${selected._id}`, form);
+        // For updates, we need to use a different approach since we can't send both JSON and multipart data
+        // We'll make a separate request for file uploads if needed
+        if (attachments.length > 0) {
+          // If there are new attachments, we need to update using multipart/form-data
+          await api.patch(`/inventory/${selected._id}`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+        } else {
+          // If no new attachments, we can use regular patch
+          await api.patch(`/inventory/${selected._id}`, form);
+        }
         toast.success('Item updated');
       } else {
-        await api.post('/inventory', form);
+        await api.post('/inventory', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
         toast.success('Item added');
       }
-      setShowForm(false); setSelected(null);
-      setForm({ name:'', category:'', sku:'', quantity:0, reorderLevel:5, reorderQty:10, unitCost:0, sellingPrice:0, supplier:'', supplierContact:'', location:'', condition:'NEW' });
+      
+      setShowForm(false); 
+      setSelected(null);
+      setForm({ 
+        name:'', category:'', sku:'', quantity:0, reorderLevel:5, reorderQty:10,
+        unitCost:0, sellingPrice:0, supplier:'', supplierContact:'', location:'', condition:'NEW'
+      });
+      setAttachments([]);
+      setImagePreviews([]);
+      setQrCode(null);
       load();
-    } catch (err) { toast.error(err.response?.data?.message || 'Error'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.message || 'Error'); 
+    }
   };
 
   const recordMove = async () => {
@@ -79,10 +173,15 @@ export default function InventoryPage({ color = '#00d4ff' }) {
 
   const editItem = (item) => {
     setSelected(item);
-    setForm({ name:item.name, category:item.category, sku:item.sku||'', quantity:item.quantity,
+    setForm({ 
+      name:item.name, category:item.category, sku:item.sku||'', quantity:item.quantity,
       reorderLevel:item.reorderLevel, reorderQty:item.reorderQty, unitCost:item.unitCost,
       sellingPrice:item.sellingPrice, supplier:item.supplier||'', supplierContact:item.supplierContact||'',
-      location:item.location||'', condition:item.condition });
+      location:item.location||'', condition:item.condition
+    });
+    setImagePreviews(item.attachments || []);
+    setQrCode(item.qrCodeUrl || null);
+    setAttachments([]); // Reset attachments when editing existing item
     setShowForm(true);
   };
 
@@ -120,7 +219,7 @@ export default function InventoryPage({ color = '#00d4ff' }) {
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
           <thead>
             <tr style={{ borderBottom:'1px solid #0a2040' }}>
-              {['Name','Category','Qty','Reorder At','Unit Cost','Sell Price','Condition','Actions'].map(h => (
+              {['Name','Category','Qty','Reorder At','Unit Cost','Sell Price','Condition','Attachments','Actions'].map(h => (
                 <th key={h} style={{ padding:'0.5rem 0.75rem', textAlign:'left', color:'#4a6a8a',
                   fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>
               ))}
@@ -144,18 +243,34 @@ export default function InventoryPage({ color = '#00d4ff' }) {
                 <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0' }}>KES {item.unitCost?.toLocaleString()}</td>
                 <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0' }}>KES {item.sellingPrice?.toLocaleString()}</td>
                 <td style={{ padding:'0.6rem 0.75rem' }}><Tag label={item.condition} color={COND_COLORS[item.condition]} /></td>
+                <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0' }}>
+                  {item.attachments && item.attachments.length > 0 ? (
+                    <span style={{ color: '#00d4ff' }}>📸 {item.attachments.length}</span>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </td>
                 <td style={{ padding:'0.6rem 0.75rem' }}>
                   <div style={{ display:'flex', gap:6 }}>
                     <button onClick={() => editItem(item)}
                       style={{ padding:'3px 8px', background:`${color}22`, color, border:`1px solid ${color}44`, borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700 }}>EDIT</button>
                     <button onClick={() => setMoveTarget(item)}
                       style={{ padding:'3px 8px', background:'#1a304022', color:'#7a9ab0', border:'1px solid #1a3050', borderRadius:4, fontSize:10, cursor:'pointer' }}>MOVE</button>
+                    {item.qrCodeUrl && (
+                      <a 
+                        href={item.qrCodeUrl} 
+                        download={`qr-${item.sku || item.name}.png`}
+                        style={{ padding:'3px 8px', background:'#00d4ff22', color:'#00d4ff', border:'1px solid #00d4ff44', borderRadius:4, fontSize:10, cursor:'pointer', textDecoration: 'none' }}
+                      >
+                        QR
+                      </a>
+                    )}
                   </div>
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={8} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>
+              <tr><td colSpan={9} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>
                 {tab === 'low-stock' ? 'All stock levels are healthy ✓' : tab === 'expiring' ? 'No items expiring soon ✓' : 'No inventory items found'}
               </td></tr>
             )}
@@ -187,12 +302,77 @@ export default function InventoryPage({ color = '#00d4ff' }) {
                     {['NEW','GOOD','FAIR','DAMAGED','SCRAPPED'].map(c => <option key={c}>{c}</option>)}
                   </select>
                 </label>
+                
+                {/* Image Upload for Hardware Repair Photos */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                    Attachments (Photos for repair documentation)
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple
+                      onChange={handleImageChange}
+                      style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13 }}
+                    />
+                  </label>
+                  
+                  {/* Display image previews */}
+                  {imagePreviews.length > 0 && (
+                    <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      {imagePreviews.map((preview, index) => (
+                        <div key={index} style={{ position: 'relative', width: '80px', height: '80px' }}>
+                          <img 
+                            src={preview} 
+                            alt={`Attachment ${index + 1}`} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '5px', border: '1px solid #1a3050' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(index)}
+                            style={{
+                              position: 'absolute',
+                              top: '-5px',
+                              right: '-5px',
+                              background: '#ff3366',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '18px',
+                              height: '18px',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {attachments.length > 0 && (
+                    <div style={{ marginTop: '10px', fontSize: '11px', color: '#7a9ab0' }}>
+                      {attachments.length} file(s) selected for upload
+                    </div>
+                  )}
+                </div>
               </div>
+              
               <div style={{ display:'flex', gap:10, marginTop:4 }}>
+                <button 
+                  type="button" 
+                  onClick={() => generateQRCode(form.sku || form.name)}
+                  style={{ flex:1, padding:'0.6rem', background:'#00d4ff', color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}
+                >
+                  Generate QR Code
+                </button>
                 <button type="submit" style={{ flex:1, padding:'0.6rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}>
                   {selected ? 'Update' : 'Add Item'}
                 </button>
-                <button type="button" onClick={() => { setShowForm(false); setSelected(null); }}
+                <button type="button" onClick={() => { setShowForm(false); setSelected(null); setAttachments([]); setImagePreviews([]); setQrCode(null); }}
                   style={{ flex:1, padding:'0.6rem', background:'transparent', color:'#7a9ab0', border:'1px solid #1a3050', borderRadius:6, cursor:'pointer' }}>
                   Cancel
                 </button>

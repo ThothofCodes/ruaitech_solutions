@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+const crypto = require('crypto');
 
 // Sign token — algorithm explicitly pinned to HS256
 const signToken = (user) =>
@@ -22,6 +23,95 @@ const signToken = (user) =>
 
 // Validate email format
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+exports.verifyToken = async (req, res, next) => {
+  try {
+    const { token, userId } = req.body;
+
+    if (!token || !userId) {
+      return res.status(400).json({ message: 'Token and user ID required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if token matches and hasn't expired
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const isTokenValid = hashedToken === user.passwordResetToken;
+    const isTokenExpired = user.tokenExpiry && user.tokenExpiry < new Date();
+
+    if (!isTokenValid || isTokenExpired) {
+      return res.status(400).json({ 
+        message: 'Invalid or expired token',
+        valid: false 
+      });
+    }
+
+    res.json({ 
+      valid: true,
+      message: 'Token is valid',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.setPassword = async (req, res, next) => {
+  try {
+    const { token, userId, password } = req.body;
+
+    if (!token || !userId || !password) {
+      return res.status(400).json({ message: 'Token, user ID, and password required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if token matches and hasn't expired
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const isTokenValid = hashedToken === user.passwordResetToken;
+    const isTokenExpired = user.tokenExpiry && user.tokenExpiry < new Date();
+
+    if (!isTokenValid || isTokenExpired) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Update password
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.tokenExpiry = undefined;
+    user.isActive = true; // Activate the user account
+    user.isEmailVerified = true; // Mark as verified
+
+    await user.save();
+
+    res.json({ 
+      message: 'Password set successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 exports.register = async (req, res, next) => {
   try {

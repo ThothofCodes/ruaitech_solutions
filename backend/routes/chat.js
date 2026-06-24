@@ -24,7 +24,8 @@ router.patch('/conversation/:conversationId/read', chatController.markAsRead);
 router.get('/callbacks', chatController.getCallbackRequests);
 router.patch('/callbacks/:id', chatController.updateCallbackRequest);
 
-// Admin status routes removed: presence is delivered via Socket.IO events only.
-
+// Admin status routes
+router.get('/admin/status', chatController.getAdminStatus);
+router.patch('/admin/status', chatController.updateAdminStatus);
 
 module.exports = router;

@@ -28,13 +28,26 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
   const [showMemoForm, setShowMemoForm] = useState(false);
   const [showAssessForm, setShowAssessForm] = useState(false);
   const [staff, setStaff]           = useState([]);
+  const [warrantyTracking, setWarrantyTracking] = useState([]); // For warranty tracking feature
+  const [showWarrantyForm, setShowWarrantyForm] = useState(false);
+  const [warrantyForm, setWarrantyForm] = useState({
+    staffId: '',
+    deviceName: '',
+    issueDate: '',
+    warrantyPeriod: 90, // in days
+    warrantyEndDate: '',
+    description: ''
+  });
   const [memoForm, setMemoForm]     = useState({ title:'', body:'', priority:'ROUTINE', requiresAck:false, recipients:'ALL' });
-  const [assessForm, setAssessForm] = useState({ staffId:'', adminFeedback:'', adminComments:'',
+  const [assessForm, setAssessForm] = useState({ 
+    staffId:'', adminFeedback:'', adminComments:'',
     kpiScores:[
       { kpiLabel:'Attendance', score:8, weight:1 },
       { kpiLabel:'Task Completion', score:8, weight:1 },
       { kpiLabel:'Quality of Work', score:8, weight:1 },
       { kpiLabel:'Punctuality', score:8, weight:1 },
+      { kpiLabel:'Communication', score:8, weight:1 },
+      { kpiLabel:'Problem Solving', score:8, weight:1 }
     ]
   });
 
@@ -57,10 +70,20 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
     finally { setLoading(false); }
   }, []);
 
+  const loadWarrantyTracking = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get('/staff-portal/warranty-tracking');
+      setWarrantyTracking(Array.isArray(data) ? data : []);
+    } catch { toast.error('Failed to load warranty tracking'); }
+    finally { setLoading(false); }
+  }, []);
+
   useEffect(() => {
     if (tab === 'memos') loadMemos();
-    else loadAssessments();
-  }, [tab, loadMemos, loadAssessments]);
+    else if (tab === 'assessments') loadAssessments();
+    else loadWarrantyTracking();
+  }, [tab, loadMemos, loadAssessments, loadWarrantyTracking]);
 
   useEffect(() => {
     api.get('/users?role=STAFF').then(r => setStaff(r.data?.users || r.data || [])).catch(() => {});
@@ -98,16 +121,47 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
     } catch (err) { toast.error(err.response?.data?.message || 'Error'); }
   };
 
-  const TABS = [['memos','📋 Memos'],['assessments','📊 Assessments']];
+  const submitWarrantyRecord = async (e) => {
+    e.preventDefault();
+    try {
+      // Calculate warranty end date
+      const startDate = new Date(warrantyForm.issueDate);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + parseInt(warrantyForm.warrantyPeriod));
+      
+      const warrantyData = {
+        ...warrantyForm,
+        warrantyEndDate: endDate.toISOString().split('T')[0]
+      };
+      
+      await api.post('/staff-portal/warranty-tracking', warrantyData);
+      toast.success('Warranty record saved');
+      setShowWarrantyForm(false);
+      setWarrantyForm({
+        staffId: '',
+        deviceName: '',
+        issueDate: '',
+        warrantyPeriod: 90,
+        warrantyEndDate: '',
+        description: ''
+      });
+      loadWarrantyTracking();
+    } catch (err) { toast.error(err.response?.data?.message || 'Error'); }
+  };
+
+  const TABS = [['memos','📋 Memos'],['assessments','📊 Assessments'], ['warranty','🔧 Warranty Tracking']];
 
   return (
     <div style={{ fontFamily:"'Inter',sans-serif", color:'#c0d8f0' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
         <h2 style={{ margin:0, fontSize:20, fontWeight:700, color }}>Staff Portal Management</h2>
-        {tab === 'memos'
-          ? <button onClick={() => setShowMemoForm(true)} style={{ padding:'0.5rem 1.2rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>+ NEW MEMO</button>
-          : <button onClick={() => setShowAssessForm(true)} style={{ padding:'0.5rem 1.2rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>+ ASSESS STAFF</button>
-        }
+        {tab === 'memos' ? (
+          <button onClick={() => setShowMemoForm(true)} style={{ padding:'0.5rem 1.2rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>+ NEW MEMO</button>
+        ) : tab === 'assessments' ? (
+          <button onClick={() => setShowAssessForm(true)} style={{ padding:'0.5rem 1.2rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>+ ASSESS STAFF</button>
+        ) : (
+          <button onClick={() => setShowWarrantyForm(true)} style={{ padding:'0.5rem 1.2rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>+ NEW WARRANTY</button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -152,7 +206,7 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
           ))}
           {memos.length === 0 && <p style={{ color:'#2a4a6a', textAlign:'center', padding:'2rem' }}>No memos yet</p>}
         </div>
-      ) : (
+      ) : tab === 'assessments' ? (
         <div>
           <p style={{ fontSize:12, color:'#4a6a8a', marginTop:0 }}>Today's assessments — {new Date().toLocaleDateString('en-KE')}</p>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
@@ -182,6 +236,43 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
               ))}
               {assessments.length === 0 && (
                 <tr><td colSpan={5} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>No assessments today yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div>
+          <p style={{ fontSize:12, color:'#4a6a8a', marginTop:0 }}>Warranty tracking for staff devices and equipment</p>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <thead>
+              <tr style={{ borderBottom:'1px solid #0a2040' }}>
+                {['Staff','Device','Issue Date','Warranty End','Status','Description'].map(h => (
+                  <th key={h} style={{ padding:'0.5rem 0.75rem', textAlign:'left', color:'#4a6a8a', fontSize:10, fontWeight:600, textTransform:'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {warrantyTracking.map((w, i) => (
+                <tr key={w._id} style={{ borderBottom:'1px solid #040c1a', background: i%2===0?'transparent':'#050d1a' }}>
+                  <td style={{ padding:'0.6rem 0.75rem', color:'#e0f0ff', fontWeight:600 }}>{w.staffId?.name || w.staffId}</td>
+                  <td style={{ padding:'0.6rem 0.75rem', color:'#e0f0ff' }}>{w.deviceName}</td>
+                  <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0' }}>{w.issueDate}</td>
+                  <td style={{ padding:'0.6rem 0.75rem', color: new Date(w.warrantyEndDate) < new Date() ? '#ff3366' : '#00ff88' }}>
+                    {w.warrantyEndDate} {new Date(w.warrantyEndDate) < new Date() ? '(EXPIRED)' : ''}
+                  </td>
+                  <td style={{ padding:'0.6rem 0.75rem' }}>
+                    <Tag label={new Date(w.warrantyEndDate) < new Date() ? 'EXPIRED' : 'ACTIVE'} 
+                         map={{ 'ACTIVE':'#00ff88', 'EXPIRED':'#ff3366' }} />
+                  </td>
+                  <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0', maxWidth:200 }}>
+                    <span style={{ display:'block', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {w.description || '—'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {warrantyTracking.length === 0 && (
+                <tr><td colSpan={6} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>No warranty records yet</td></tr>
               )}
             </tbody>
           </table>
@@ -258,6 +349,74 @@ export default function StaffPortalAdmin({ color = '#00d4ff' }) {
               <div style={{ display:'flex', gap:10 }}>
                 <button type="submit" style={{ flex:1, padding:'0.6rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}>Save Assessment</button>
                 <button type="button" onClick={() => setShowAssessForm(false)}
+                  style={{ flex:1, padding:'0.6rem', background:'transparent', color:'#7a9ab0', border:'1px solid #1a3050', borderRadius:6, cursor:'pointer' }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Warranty Tracking Form Modal */}
+      {showWarrantyForm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+          <div style={{ background:'#060d14', border:`1px solid ${color}44`, borderRadius:12, padding:'1.5rem', width:480, maxHeight:'90vh', overflowY:'auto' }}>
+            <h3 style={{ margin:'0 0 1rem', color, fontSize:16 }}>New Warranty Record</h3>
+            <form onSubmit={submitWarrantyRecord} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                Staff Member *
+                <select value={warrantyForm.staffId} onChange={e => setWarrantyForm(p=>({...p,staffId:e.target.value}))} required
+                  style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13 }}>
+                  <option value="">Select staff…</option>
+                  {staff.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                </select>
+              </label>
+
+              <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                Device/Equipment Name *
+                <input value={warrantyForm.deviceName} onChange={e => setWarrantyForm(p=>({...p,deviceName:e.target.value}))} required
+                  style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13, outline:'none' }} />
+              </label>
+
+              <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                Issue Date *
+                <input type="date" value={warrantyForm.issueDate} onChange={e => setWarrantyForm(p=>({...p,issueDate:e.target.value}))} required
+                  style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13 }} />
+              </label>
+
+              <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                Warranty Period (days) *
+                <input type="number" min={1} max={365} value={warrantyForm.warrantyPeriod} 
+                  onChange={e => {
+                    setWarrantyForm(p=>({...p,warrantyPeriod:e.target.value}));
+                    // Update calculated end date
+                    if (p.issueDate) {
+                      const startDate = new Date(p.issueDate);
+                      const endDate = new Date(startDate);
+                      endDate.setDate(endDate.getDate() + parseInt(e.target.value));
+                      setWarrantyForm(prev => ({
+                        ...prev,
+                        warrantyEndDate: endDate.toISOString().split('T')[0]
+                      }));
+                    }
+                  }}
+                  style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13, outline:'none' }} />
+              </label>
+
+              {warrantyForm.warrantyEndDate && (
+                <label style={{ fontSize:11, color:'#7a9ab0', display:'flex', flexDirection:'column', gap:4 }}>
+                  Calculated Warranty End Date
+                  <div style={{ padding:'0.45rem 0.7rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13 }}>
+                    {warrantyForm.warrantyEndDate}
+                  </div>
+                </label>
+              )}
+
+              <Textarea label="Description" value={warrantyForm.description}
+                onChange={e => setWarrantyForm(p=>({...p,description:e.target.value}))} rows={3} />
+
+              <div style={{ display:'flex', gap:10 }}>
+                <button type="submit" style={{ flex:1, padding:'0.6rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}>Save Warranty</button>
+                <button type="button" onClick={() => setShowWarrantyForm(false)}
                   style={{ flex:1, padding:'0.6rem', background:'transparent', color:'#7a9ab0', border:'1px solid #1a3050', borderRadius:6, cursor:'pointer' }}>Cancel</button>
               </div>
             </form>

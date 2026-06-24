@@ -20,8 +20,14 @@ export default function BillingPage({ color = '#00d4ff' }) {
   const [loading, setLoading]   = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showETIMSModal, setShowETIMSModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [clients, setClients]   = useState([]);
-  const [form, setForm]         = useState({ clientId:'', dueDate:'', notes:'', lineItems:[{ description:'', qty:1, unitPrice:0 }] });
+  const [form, setForm]         = useState({ 
+    clientId:'', dueDate:'', notes:'', lineItems:[{ description:'', qty:1, unitPrice:0 }], 
+    etimsInvoiceNumber: null, // Track eTIMS invoice number
+    etimsStatus: 'NOT_SENT' // Track eTIMS status
+  });
 
   const load = useCallback(async () => {
     try {
@@ -57,10 +63,13 @@ export default function BillingPage({ color = '#00d4ff' }) {
     e.preventDefault();
     if (!form.clientId) { toast.error('Select a client'); return; }
     try {
-      await api.post('/billing', { ...form, lineItems: form.lineItems.map(i=>({ ...i, qty:Number(i.qty), unitPrice:Number(i.unitPrice) })) });
+      await api.post('/billing', { 
+        ...form, 
+        lineItems: form.lineItems.map(i=>({ ...i, qty:Number(i.qty), unitPrice:Number(i.unitPrice) }))
+      });
       toast.success('Invoice created');
       setShowForm(false);
-      setForm({ clientId:'', dueDate:'', notes:'', lineItems:[{ description:'', qty:1, unitPrice:0 }] });
+      setForm({ clientId:'', dueDate:'', notes:'', lineItems:[{ description:'', qty:1, unitPrice:0 }], etimsInvoiceNumber: null, etimsStatus: 'NOT_SENT' });
       load();
     } catch (err) { toast.error(err.response?.data?.message || 'Error'); }
   };
@@ -79,6 +88,23 @@ export default function BillingPage({ color = '#00d4ff' }) {
     if (!window.confirm('Cancel this invoice?')) return;
     try { await api.patch(`/billing/${id}/cancel`); toast.success('Invoice cancelled'); load(); }
     catch (err) { toast.error(err.response?.data?.message || 'Error'); }
+  };
+
+  // Function to submit invoice to KRA eTIMS
+  const submitToETIMS = async (invoiceId) => {
+    try {
+      const response = await api.post(`/billing/${invoiceId}/etims-submit`);
+      toast.success('Invoice submitted to KRA eTIMS');
+      // Update the invoice with eTIMS info
+      const updatedInvoices = invoices.map(inv => 
+        inv._id === invoiceId 
+          ? { ...inv, etimsInvoiceNumber: response.data.etimsInvoiceNumber, etimsStatus: 'SUBMITTED' } 
+          : inv
+      );
+      setInvoices(updatedInvoices);
+    } catch (err) {
+      toast.error('Failed to submit to KRA eTIMS: ' + (err.response?.data?.message || 'Error'));
+    }
   };
 
   const STATUSES = ['','DRAFT','SENT','PAYMENT_SENT','PAID','PARTIAL','OVERDUE','CANCELLED'];
@@ -108,7 +134,7 @@ export default function BillingPage({ color = '#00d4ff' }) {
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
           <thead>
             <tr style={{ borderBottom:'1px solid #0a2040' }}>
-              {['Invoice ID','Client','Total (KES)','Balance (KES)','Due Date','Status','Actions'].map(h => (
+              {['Invoice ID','Client','Total (KES)','Balance (KES)','Due Date','Status','eTIMS','Actions'].map(h => (
                 <th key={h} style={{ padding:'0.5rem 0.75rem', textAlign:'left', color:'#4a6a8a',
                   fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>
               ))}
@@ -123,6 +149,15 @@ export default function BillingPage({ color = '#00d4ff' }) {
                 <td style={{ padding:'0.6rem 0.75rem', color: inv.balance > 0 ? '#ff3366' : '#00ff88' }}>{inv.balance?.toLocaleString()}</td>
                 <td style={{ padding:'0.6rem 0.75rem', color:'#7a9ab0' }}>{new Date(inv.dueDate).toLocaleDateString('en-KE')}</td>
                 <td style={{ padding:'0.6rem 0.75rem' }}><Tag label={inv.status} /></td>
+                <td style={{ padding:'0.6rem 0.75rem', color: '#7a9ab0' }}>
+                  {inv.etimsStatus === 'SUBMITTED' ? (
+                    <span style={{ color: '#00ff88' }}>✓ {inv.etimsInvoiceNumber || 'Submitted'}</span>
+                  ) : inv.etimsStatus === 'FAILED' ? (
+                    <span style={{ color: '#ff3366' }}>✗ Failed</span>
+                  ) : (
+                    <span style={{ color: '#7a9ab0' }}>Not sent</span>
+                  )}
+                </td>
                 <td style={{ padding:'0.6rem 0.75rem' }}>
                   <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                     {inv.status === 'DRAFT' && (
@@ -137,12 +172,16 @@ export default function BillingPage({ color = '#00d4ff' }) {
                       <button onClick={() => cancelInvoice(inv._id)}
                         style={{ padding:'3px 8px', background:'#ff336622', color:'#ff3366', border:'1px solid #ff336644', borderRadius:4, fontSize:10, cursor:'pointer' }}>CANCEL</button>
                     )}
+                    {inv.status === 'PAID' && !inv.etimsInvoiceNumber && (
+                      <button onClick={() => submitToETIMS(inv._id)}
+                        style={{ padding:'3px 8px', background:'#00d4ff22', color:'#00d4ff', border:'1px solid #00d4ff44', borderRadius:4, fontSize:10, cursor:'pointer', fontWeight:700 }}>eTIMS</button>
+                    )}
                   </div>
                 </td>
               </tr>
             ))}
             {invoices.length === 0 && (
-              <tr><td colSpan={7} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>No invoices found</td></tr>
+              <tr><td colSpan={8} style={{ padding:'2rem', textAlign:'center', color:'#2a4a6a' }}>No invoices found</td></tr>
             )}
           </tbody>
         </table>
@@ -207,6 +246,13 @@ export default function BillingPage({ color = '#00d4ff' }) {
                 <textarea value={form.notes} onChange={e => setForm(p=>({...p,notes:e.target.value}))} rows={2}
                   style={{ padding:'0.45rem', background:'#0a1628', border:'1px solid #1a3050', borderRadius:5, color:'#e0f0ff', fontSize:13, resize:'none', outline:'none' }} />
               </label>
+
+              {/* KRA eTIMS Integration Notice */}
+              <div style={{ background:'#0a1628', borderLeft:`3px solid ${color}`, borderRadius:6, padding:'0.75rem', fontSize:11, color:'#7a9ab0' }}>
+                <div style={{ fontWeight:700, color, marginBottom:4 }}>KRA eTIMS Compliance</div>
+                <div>After payment is confirmed, submit this invoice to KRA eTIMS for tax compliance.</div>
+                <div style={{ marginTop: 4, fontSize:10, color:'#4a6a8a' }}>Required for invoices over KES 500</div>
+              </div>
 
               <div style={{ display:'flex', gap:10 }}>
                 <button type="submit" style={{ flex:1, padding:'0.6rem', background:color, color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}>Create Invoice</button>

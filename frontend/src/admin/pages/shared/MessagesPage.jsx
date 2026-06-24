@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useChat } from '../../../hooks/useChat';
+import { api } from '../../../utils/api';
 import toast from 'react-hot-toast';
 
 const MessagesPage = () => {
@@ -51,14 +52,17 @@ const MessagesPage = () => {
     currentConversation,
     joinConversation,
     getMessagesForConversation,
-    sendMessage,
+    sendMessageToCustomer, // Fixed function name
     setCurrentConversation,
-    getActiveConversations
+    setMessages,
+    socket
   } = useChat({ authToken: tokenValid ? authToken : null });
   
   const [newMessage, setNewMessage] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
+  const [notificationChannel, setNotificationChannel] = useState('sms'); // Default to SMS
+  const [conversationMessages, setConversationMessages] = useState({});
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to bottom when messages change
@@ -70,12 +74,78 @@ const MessagesPage = () => {
     }
   }, [messages, currentConversation]);
 
+  // Update conversation messages when currentConversation changes
+  useEffect(() => {
+    if (currentConversation) {
+      const filteredMessages = messages.filter(msg => 
+        msg.conversationId === currentConversation || 
+        msg.conversationId === `conversation-${currentConversation}` ||
+        msg.conversationId === currentConversation.replace('conversation-', '')
+      );
+      setConversationMessages(prev => ({
+        ...prev,
+        [currentConversation]: filteredMessages
+      }));
+      
+      // Also fetch fresh messages from server
+      getMessagesForConversation(currentConversation);
+    }
+  }, [messages, currentConversation, getMessagesForConversation]);
+
+  // Listen for new messages from socket to update conversationMessages state
+  useEffect(() => {
+    if (socket) {
+      const handleNewMessage = (data) => {
+        const { conversationId, message } = data;
+        if (conversationId === currentConversation) {
+          setConversationMessages(prev => ({
+            ...prev,
+            [currentConversation]: [...(prev[currentConversation] || []), message]
+          }));
+        }
+      };
+      
+      socket.on('new-chat-message', handleNewMessage);
+      
+      return () => {
+        if (socket) {
+          socket.off('new-chat-message', handleNewMessage);
+        }
+      };
+    }
+  }, [socket, currentConversation]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !currentConversation) return;
     
-    const guestIdFromConv = currentConversation.replace('guest-', '');
-    sendMessage(currentConversation, newMessage, guestIdFromConv);
+    // Extract guestId from various possible conversation ID formats
+    let guestId = currentConversation.replace('conversation-guest-', '');
+    if (guestId === currentConversation) {
+      guestId = currentConversation.replace('guest-', '');
+    }
+    if (guestId === currentConversation) {
+      guestId = currentConversation;
+    }
+    
+    // Send the message - using the correct function name
+    sendMessageToCustomer(currentConversation, newMessage, guestId);
+    
+    // Add the message to the conversation messages state
+    setConversationMessages(prev => ({
+      ...prev,
+      [currentConversation]: [
+        ...(prev[currentConversation] || []),
+        {
+          message: newMessage,
+          timestamp: new Date().toISOString(),
+          direction: 'outgoing',
+          senderType: 'admin',
+          _id: `temp-${Date.now()}`
+        }
+      ]
+    }));
+    
     setNewMessage('');
   };
 
@@ -86,13 +156,45 @@ const MessagesPage = () => {
   };
 
   // Get messages for current conversation
-  const currentMessages = currentConversation 
-    ? getMessagesForConversation(currentConversation) 
-    : [];
+  const currentMessages = conversationMessages[currentConversation] || [];
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Function to send notification via selected channel
+  const sendNotification = async (conversationId, message) => {
+    try {
+      // Extract guestId from various possible conversation ID formats
+      let guestId = conversationId.replace('conversation-guest-', '');
+      if (guestId === conversationId) {
+        guestId = conversationId.replace('guest-', '');
+      }
+      if (guestId === conversationId) {
+        guestId = conversationId;
+      }
+      
+      // Determine which endpoint to use based on selected channel
+      let endpoint = '';
+      if (notificationChannel === 'whatsapp') {
+        endpoint = `/notifications/send-whatsapp`;
+      } else if (notificationChannel === 'sms') {
+        endpoint = `/notifications/send-sms`;
+      } else {
+        endpoint = `/notifications/send`;
+      }
+      
+      await api.post(endpoint, {
+        guestId,
+        message,
+        channel: notificationChannel
+      });
+      
+      toast.success(`${notificationChannel.toUpperCase()} notification sent`);
+    } catch (error) {
+      toast.error(`Failed to send ${notificationChannel} notification`);
+    }
   };
 
   if (!tokenValid) {
@@ -160,6 +262,26 @@ const MessagesPage = () => {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label htmlFor="notification-channel" style={{ color: '#b8a8d8', fontSize: '0.875rem' }}>Channel:</label>
+                <select
+                  id="notification-channel"
+                  value={notificationChannel}
+                  onChange={(e) => setNotificationChannel(e.target.value)}
+                  style={{
+                    padding: '0.25rem 0.5rem',
+                    background: 'rgba(14,10,20,0.6)',
+                    border: '1px solid rgba(240,238,255,0.12)',
+                    borderRadius: '4px',
+                    color: '#f0eeff',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <option value="sms">SMS</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
               <span style={{ 
                 padding: '0.5rem 1rem', 
                 borderRadius: '20px', 
@@ -234,23 +356,33 @@ const MessagesPage = () => {
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {filteredConversations.length > 0 ? (
                 filteredConversations.map((conv, index) => {
-                  const filteredMessages = messages.filter(msg => msg.conversationId === conv.conversationId);
-                  const lastMessage = filteredMessages[filteredMessages.length - 1];
+                  // Normalize conversation ID to handle different formats
+                  const normalizedConvId = conv.conversationId.startsWith('conversation-') 
+                    ? conv.conversationId 
+                    : `conversation-${conv.conversationId}`;
+                  
+                  const convMessages = conversationMessages[normalizedConvId] || 
+                                      messages.filter(msg => 
+                                        msg.conversationId === normalizedConvId || 
+                                        msg.conversationId === conv.conversationId ||
+                                        msg.conversationId === `conversation-${conv.conversationId}`
+                                      );
+                  const lastMessage = convMessages.length > 0 ? convMessages[convMessages.length - 1] : null;
                   
                   return (
                     <div
-                      key={`${conv.conversationId}-${index}`} // Added index to ensure unique key
-                      onClick={() => handleSelectConversation(conv.conversationId)}
+                      key={`${normalizedConvId}-${index}`} // Added index to ensure unique key
+                      onClick={() => handleSelectConversation(normalizedConvId)}
                       className={`p-3 cursor-pointer transition-colors ${
-                        currentConversation === conv.conversationId 
+                        currentConversation === normalizedConvId 
                           ? 'background: rgba(0, 212, 255, 0.1); border-left: 3px solid #00d4ff;' 
                           : 'hover:bg-gray-800'
                       }`}
                       style={{
-                        backgroundColor: currentConversation === conv.conversationId 
+                        backgroundColor: currentConversation === normalizedConvId 
                           ? 'rgba(0, 212, 255, 0.1)' 
                           : 'transparent',
-                        borderLeft: currentConversation === conv.conversationId 
+                        borderLeft: currentConversation === normalizedConvId 
                           ? '3px solid #00d4ff' 
                           : 'none',
                         cursor: 'pointer',
@@ -260,7 +392,7 @@ const MessagesPage = () => {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                         <div style={{ fontWeight: '600', color: '#f0eeff' }}>
-                          Guest: {conv.guestId?.substring(0, 8) || conv.conversationId.replace('guest-', '').substring(0, 8)}
+                          Guest: {conv.guestId?.substring(0, 8) || normalizedConvId.replace('conversation-guest-', '').substring(0, 8)}
                         </div>
                         <span style={{ fontSize: '0.75rem', color: '#b8a8d8' }}>
                           {conv.timestamp ? new Date(conv.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
@@ -288,6 +420,27 @@ const MessagesPage = () => {
                           Active now
                         </span>
                       </div>
+                      
+                      {/* Notification button for this conversation */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendNotification(normalizedConvId, `Hello, this is a ${notificationChannel} notification from Ruai Tech Solutions.`);
+                        }}
+                        style={{
+                          marginTop: '0.5rem',
+                          padding: '0.25rem 0.5rem',
+                          background: 'rgba(0, 212, 255, 0.2)',
+                          color: '#00d4ff',
+                          border: '1px solid rgba(0, 212, 255, 0.3)',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          width: '100%'
+                        }}
+                      >
+                        Send {notificationChannel.toUpperCase()}
+                      </button>
                     </div>
                   );
                 })
@@ -318,13 +471,28 @@ const MessagesPage = () => {
                 }}>
                   <div>
                     <h3 style={{ color: '#f0eeff', fontWeight: 600, margin: 0 }}>
-                      Chat with Guest: {currentConversation.replace('guest-', '').substring(0, 8)}
+                      Chat with Guest: {currentConversation.replace('conversation-guest-', '').substring(0, 8)}
                     </h3>
                     <p style={{ color: '#b8a8d8', fontSize: '0.875rem', margin: 0 }}>
                       {currentMessages.length} messages • {connected ? 'Connected' : 'Disconnected'}
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {/* Notification button for current conversation */}
+                    <button
+                      onClick={() => sendNotification(currentConversation, `Hello, this is a ${notificationChannel} notification from Ruai Tech Solutions.`)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'rgba(0, 212, 255, 0.2)',
+                        color: '#00d4ff',
+                        border: '1px solid rgba(0, 212, 255, 0.3)',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Send {notificationChannel.toUpperCase()}
+                    </button>
                     <span style={{ 
                       padding: '0.25rem 0.5rem', 
                       borderRadius: '12px', 
@@ -347,7 +515,7 @@ const MessagesPage = () => {
                   {currentMessages.length > 0 ? (
                     currentMessages.map((msg, index) => (
                       <div
-                        key={index}
+                        key={`${msg._id || index}-${msg.timestamp || Date.now()}`}
                         style={{
                           marginBottom: '1rem',
                           display: 'flex',

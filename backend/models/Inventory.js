@@ -21,6 +21,7 @@ const InventoryItemSchema = new mongoose.Schema({
   expiryDate:      Date,
   assignedTo:      { type: mongoose.Schema.Types.ObjectId, default: null },
   lastRestockedAt: Date,
+  attachments:     [String], // Array of image URLs for hardware repair documentation
 }, { timestamps: true });
 
 InventoryItemSchema.index({ department: 1, category: 1 });

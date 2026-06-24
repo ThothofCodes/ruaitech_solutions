@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const router = require('express').Router();
-const {
-  getProducts, getProductBySlug, createProduct, updateProduct, deleteProduct, seedProducts,
-} = require('../controllers/productController');
-const { protect, deptAdminGuard, superAdminGuard } = require('../middleware/auth');
-// FIX: upload.js now exports { upload, uploadProductImages } — destructure accordingly.
-// The old default export was `upload` (a multer instance using CloudinaryStorage);
-// the new export is `upload` (multer with memoryStorage) + uploadProductImages helper.
-const { upload } = require('../middleware/upload');
+const express = require('express');
+const router = express.Router();
+const productController = require('../controllers/productController');
+const { protect, deptAdminGuard } = require('../middleware/auth');
+const { upload } = require('../middleware/upload'); // Destructure the upload object
 
-// Public reads
-router.get('/', getProducts);
-router.get('/:slug', getProductBySlug);
+// Public routes
+router.get('/', productController.getProducts);  // Changed from getAll to getProducts
+router.get('/featured', productController.getFeatured);
+router.get('/search', productController.search);
+router.get('/:id', productController.getById);
 
-// Seed — Super Admin only
-router.post('/seed', protect, superAdminGuard, seedProducts);
+// Protected routes
+router.use(protect);
 
-// Create/Update/Delete — DEPT_HEAD_OWNER or SUPER_ADMIN
-router.post('/',      protect, deptAdminGuard, upload.array('images', 5), createProduct);
-router.put('/:id',   protect, deptAdminGuard, upload.array('images', 5), updateProduct);
-router.delete('/:id', protect, deptAdminGuard, deleteProduct);
+// Admin routes
+router.use(deptAdminGuard);
+
+router.post('/', upload.array('images', 5), productController.createProduct);  // Changed from create to createProduct
+router.put('/:id', upload.array('images', 5), productController.updateProduct);  // Changed from update to updateProduct
+router.delete('/:id', productController.deleteProduct);  // Changed from delete to deleteProduct
 
 module.exports = router;

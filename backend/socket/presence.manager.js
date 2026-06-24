@@ -53,7 +53,8 @@ const presenceManager = {
         adminAvailability.set(adminId, true);
       }
       
-      console.log(`[PRESENCE] Admin ${adminId} online (dept=${adminMeta.get(adminId).departmentSlug || 'n/a'}, superAdmin=${adminMeta.get(adminId).isSuperAdmin}). Sockets: ${this.onlineAdminCount()}`);
+      console.log(`[PRESENCE] Admin ${adminId} connected with socket ${socketId}. Total sockets: ${adminSockets.get(adminId).size}. Dept: ${adminMeta.get(adminId).departmentSlug || 'n/a'}, SuperAdmin: ${adminMeta.get(adminId).isSuperAdmin}. Available: ${this.isAdminAvailable(adminId)}`);
+      console.log(`[PRESENCE] Total connected admins: ${this.onlineAdminCount()}`);
     } catch (error) {
       console.error(`[PRESENCE] Error in adminConnected: ${error.message}`, {
         error,
@@ -84,7 +85,11 @@ const presenceManager = {
           adminSockets.delete(adminId);
           adminMeta.delete(adminId); // no live sockets left — drop dept/clearance metadata too
           console.log(`[PRESENCE] Admin ${adminId} fully offline.`);
+        } else {
+          console.log(`[PRESENCE] Admin ${adminId} socket ${socketId} disconnected. Still connected: ${sockets.size} sockets.`);
         }
+      } else {
+        console.log(`[PRESENCE] Admin ${adminId} had no registered sockets, socket ${socketId} disconnect processed.`);
       }
     } catch (error) {
       console.error(`[PRESENCE] Error in adminDisconnected: ${error.message}`, {
@@ -98,9 +103,11 @@ const presenceManager = {
 
   isAnyAdminOnline() {
     try {
-      // An admin is considered "online" if they are connected AND available
+      // NEW LOGIC: For global chat availability, we only check if any admin is physically connected
+      // regardless of their individual availability settings
       for (const [adminId, sockets] of adminSockets) {
-        if (sockets.size > 0 && this.isAdminAvailable(adminId)) {
+        if (sockets.size > 0) {
+          // As long as any admin is physically connected, return true
           return true;
         }
       }
@@ -115,7 +122,7 @@ const presenceManager = {
     try {
       let count = 0;
       for (const [adminId, sockets] of adminSockets) {
-        if (sockets.size > 0 && this.isAdminAvailable(adminId)) {
+        if (sockets.size > 0) {
           count++;
         }
       }
@@ -129,7 +136,7 @@ const presenceManager = {
   getFirstAdminSocketId() {
     try {
       for (const [adminId, sockets] of adminSockets) {
-        if (sockets.size > 0 && this.isAdminAvailable(adminId)) {
+        if (sockets.size > 0) {
           const [first] = sockets;
           console.debug(`[PRESENCE] Found first socket for available admin ${adminId}: ${first}`);
           return first;
@@ -153,7 +160,7 @@ const presenceManager = {
   isAnyAdminOnlineForDept(deptSlug) {
     try {
       for (const [adminId, sockets] of adminSockets) {
-        if (sockets.size === 0 || !this.isAdminAvailable(adminId)) continue;
+        if (sockets.size === 0) continue; // Check physical connection only
         const meta = adminMeta.get(adminId);
         if (!meta) continue;
         if (meta.isSuperAdmin) return true; // highest clearance — covers every department
@@ -174,7 +181,7 @@ const presenceManager = {
   getFirstAdminSocketIdForDept(deptSlug) {
     try {
       for (const [adminId, sockets] of adminSockets) {
-        if (sockets.size === 0 || !this.isAdminAvailable(adminId)) continue;
+        if (sockets.size === 0) continue; // Check physical connection only
         const meta = adminMeta.get(adminId);
         if (!meta) continue;
         if (meta.isSuperAdmin || (deptSlug && meta.departmentSlug === deptSlug)) {
@@ -199,7 +206,7 @@ const presenceManager = {
       let superAdminOnline = false;
       for (const [adminId, sockets] of adminSockets) {
         const meta = adminMeta.get(adminId);
-        if (meta?.isSuperAdmin && sockets.size > 0 && this.isAdminAvailable(adminId)) {
+        if (meta?.isSuperAdmin && sockets.size > 0) {
           superAdminOnline = true;
           break;
         }
@@ -292,6 +299,10 @@ const presenceManager = {
     try {
       adminAvailability.set(adminId, available);
       console.log(`[PRESENCE] Admin ${adminId} availability set to ${available}`);
+      
+      // Log the impact on overall admin status
+      console.log(`[PRESENCE] After availability change for admin ${adminId}, total available admins: ${this.onlineAdminCount()}`);
+      console.log(`[PRESENCE] Overall admin status: ${this.isAnyAdminOnline() ? 'ONLINE' : 'OFFLINE'}`);
     } catch (error) {
       console.error(`[PRESENCE] Error in setAdminAvailability: ${error.message}`, {
         error,
@@ -317,6 +328,32 @@ const presenceManager = {
       return adminAvailability.get(adminId) ?? true;
     } catch (error) {
       console.error(`[PRESENCE] Error in getAdminAvailability: ${error.message}`, { error });
+      throw error;
+    }
+  },
+  
+  // Method to check if admin is truly connected across devices/networks
+  isSpecificAdminOnline(adminId) {
+    try {
+      const sockets = adminSockets.get(adminId);
+      const isOnline = !!sockets && sockets.size > 0 && this.isAdminAvailable(adminId);
+      console.debug(`[PRESENCE] Admin ${adminId} online status: ${isOnline} (sockets: ${sockets?.size || 0}, available: ${this.isAdminAvailable(adminId)})`);
+      return isOnline;
+    } catch (error) {
+      console.error(`[PRESENCE] Error in isSpecificAdminOnline: ${error.message}`, { error, adminId });
+      throw error;
+    }
+  },
+  
+  // Method to get all socket IDs for a specific admin
+  getAdminSocketIds(adminId) {
+    try {
+      const sockets = adminSockets.get(adminId);
+      const socketIds = sockets ? Array.from(sockets) : [];
+      console.debug(`[PRESENCE] Admin ${adminId} has ${socketIds.length} socket(s): [${socketIds.join(', ')}]`);
+      return socketIds;
+    } catch (error) {
+      console.error(`[PRESENCE] Error in getAdminSocketIds: ${error.message}`, { error, adminId });
       throw error;
     }
   }

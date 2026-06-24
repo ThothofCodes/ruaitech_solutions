@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { AdminAuthProvider } from './admin/context/AdminAuthContext';
+import useSocket from './hooks/useSocket';
 
 import PrivateRoute from './components/PrivateRoute';
 import AdminPrivateRoute from './admin/components/AdminPrivateRoute';
@@ -41,6 +42,10 @@ import Contact from './pages/Contact';
 import TrackTicket from './pages/TrackTicket';
 import SessionsPage from './admin/pages/playstation/Sessions';
 import PublicWebPortal from './pages/PublicWebPortal';
+import HelpDesk from './pages/HelpDesk';
+
+// ── Department specific pages ──────────────────────────────────────────────
+import JobCards from './admin/pages/repair/JobCards'; // Import the JobCards page
 
 
 // ── Public layouts ─────────────────────────────────────────────────────────
@@ -57,10 +62,19 @@ import InventoryPage from './admin/pages/shared/InventoryPage';
 import TicketsPage from './admin/pages/shared/TicketsPage';
 import StaffPortalAdmin from './admin/pages/shared/StaffPortalAdmin';
 import MessagesPage from './admin/pages/shared/MessagesPage';
+import StaffInvitation from './admin/pages/shared/StaffInvitation';
+import CRMPage from './admin/pages/shared/CRMPage'; // Import the enhanced CRM page
+import BillingPage from './admin/pages/shared/BillingPage'; // Import the enhanced Billing page
 
 // ── Staff & Client portals ─────────────────────────────────────────────────
 import StaffDashboard from './pages/staff/StaffDashboard';
 import ClientPortal from './pages/client/ClientPortal';
+
+// ── Staff invitation page ──────────────────────────────────────────────────
+import SetPassword from './pages/staff/SetPassword';
+
+// ── Callbacks page ─────────────────────────────────────────────────────────
+import Callbacks from './pages/Callbacks';
 
 // ── Chat widget (public only) ──────────────────────────────────────────────
 import ChatWidget from './components/ChatWidget';
@@ -92,13 +106,17 @@ function ConditionalChatWidget() {
   const isNonPublicRoute =
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/staff') ||
-    location.pathname.startsWith('/client');
+    location.pathname.startsWith('/client') ||
+    location.pathname === '/chat'; // Also hide on dedicated chat route
 
   if (isNonPublicRoute) return null;
   return <ChatWidget isAdmin={false} />;
 }
 
 export default function App() {
+  // Initialize global socket connection
+  useSocket();
+
   return (
     <div data-testid="app-container">
       <BrowserRouter>
@@ -125,6 +143,15 @@ export default function App() {
                 <Route path="/offline" element={<div>Offline</div>} />
                 <Route path="/legal" element={<div>Legal</div>} />
                 <Route path="/contact" element={<Contact />} />
+
+                {/* ── Direct support chat route ── */}
+                <Route path="/chat" element={<MessagesPage />} />
+
+                {/* ── Callbacks route ── */}
+                <Route path="/callbacks" element={<Callbacks />} />
+
+                {/* ── Staff password setup ── */}
+                <Route path="/staff/set-password" element={<SetPassword />} />
 
                 {/* ── Admin entry ── */}
                 <Route path="/admin/login" element={<Login />} />
@@ -158,6 +185,7 @@ export default function App() {
                   <Route path="broadcast" element={<Soon label="Broadcast" />} />
                   <Route path="settings" element={<Soon label="System Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#a78bfa" />} />
                 </Route>
 
                 {/* ── Departments ── */}
@@ -165,32 +193,34 @@ export default function App() {
                   <Route index element={<Soon label="Internet Distribution" />} />
                   <Route path="clients" element={<Soon label="ISP Clients" />} />
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#00d4ff" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#00d4ff" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#00d4ff" />} />
                   <Route path="tickets" element={<TicketsPage color="#00d4ff" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#00d4ff" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#00d4ff" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#00d4ff" />} />
                 </Route>
 
                 <Route path="/admin/webdev" element={<DeptLayout slug="webdev" title="Web Development" />}>
                   <Route index element={<Soon label="Web Development" />} />
                   <Route path="projects" element={<Soon label="Projects" />} />
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#a78bfa" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#a78bfa" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#a78bfa" />} />
                   <Route path="tickets" element={<TicketsPage color="#a78bfa" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#a78bfa" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#a78bfa" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#a78bfa" />} />
                 </Route>
 
                 <Route path="/admin/playstation" element={<DeptLayout slug="playstation" title="PlayStation Arena" />}>
@@ -198,64 +228,68 @@ export default function App() {
                   <Route path="sessions" element={<SessionsPage />} />
 
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#ffd700" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#ffd700" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#ffd700" />} />
                   <Route path="tickets" element={<TicketsPage color="#ffd700" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#ffd700" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#ffd700" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#ffd700" />} />
                 </Route>
 
                 <Route path="/admin/repair" element={<DeptLayout slug="repair" title="Hardware Repair" />}>
                   <Route index element={<Soon label="Hardware Repair" />} />
-                  <Route path="jobcards" element={<Soon label="Job Cards" />} />
+                  <Route path="jobcards" element={<JobCards />} /> {/* Changed from Soon to JobCards */}
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#ff8800" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#ff8800" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#ff8800" />} />
                   <Route path="tickets" element={<TicketsPage color="#ff8800" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#ff8800" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#ff8800" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#ff8800" />} />
                 </Route>
 
                 <Route path="/admin/cybersecurity" element={<DeptLayout slug="cybersecurity" title="Cybersecurity" />}>
                   <Route index element={<Soon label="Cybersecurity" />} />
                   <Route path="contracts" element={<Soon label="Contracts" />} />
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#ff3366" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#ff3366" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#ff3366" />} />
                   <Route path="tickets" element={<TicketsPage color="#ff3366" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#ff3366" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#ff3366" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#ff3366" />} />
                 </Route>
 
                 <Route path="/admin/govadmin" element={<DeptLayout slug="govadmin" title="Gov Admin Assistance" />}>
                   <Route index element={<Soon label="Gov Admin Assistance" />} />
                   <Route path="govdocs" element={<Soon label="Documents" />} />
                   <Route path="transactions" element={<Soon label="Transactions" />} />
-                  <Route path="crm" element={<Soon label="CRM" />} />
-                  <Route path="billing" element={<Soon label="Billing" />} />
+                  <Route path="crm" element={<CRMPage color="#00ff88" />} /> {/* Changed from Soon to CRMPage */}
+                  <Route path="billing" element={<BillingPage color="#00ff88" />} /> {/* Changed from Soon to BillingPage */}
                   <Route path="inventory" element={<InventoryPage color="#00ff88" />} />
                   <Route path="tickets" element={<TicketsPage color="#00ff88" />} />
                   <Route path="staff-portal" element={<StaffPortalAdmin color="#00ff88" />} />
-                  <Route path="staff" element={<DeptStaff />} />
+                  <Route path="staff" element={<StaffInvitation color="#00ff88" />} />
                   <Route path="expenses" element={<Soon label="Expenses" />} />
                   <Route path="audit" element={<Soon label="Audit Log" />} />
                   <Route path="settings" element={<Soon label="Settings" />} />
                   <Route path="chat" element={<MessagesPage />} />
+                  <Route path="staff-invitation" element={<StaffInvitation color="#00ff88" />} />
                 </Route>
 
                 {/* ── Staff Portal ── */}
@@ -279,11 +313,13 @@ export default function App() {
                   <Route path="/consult/book" element={<ConsultBook />} />
                   <Route path="/services" element={<PublicServices />} />
                   <Route path="/contact" element={<Contact />} />
+                  <Route path="/help" element={<HelpDesk />} />
                   <Route path="/track" element={<TrackTicket />} />
                   <Route path="/client/portal/:projectToken" element={<PublicWebPortal />} />
                 </Route>
               </Routes>
 
+              <ConditionalChatWidget />
               <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
             </CartProvider>
           </AdminAuthProvider>

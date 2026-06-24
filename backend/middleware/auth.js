@@ -108,6 +108,26 @@ exports.deptScope = (req, res, next) => {
   next();
 };
 
+// ── Role authorization middleware ──────────────────────────────────────────
+exports.authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Access denied. No user authenticated.' });
+    }
+    
+    const userRole = req.user.role;
+    
+    // Flatten roles array in case it's passed as nested arrays
+    const allowedRoles = roles.flat();
+    
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+    
+    next();
+  };
+};
+
 // ── Legacy aliases ────────────────────────────────────────────────────────
 exports.admin = exports.superAdminGuard;
 exports.staff = exports.staffGuard;

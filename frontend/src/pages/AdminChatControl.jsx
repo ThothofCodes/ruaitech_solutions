@@ -12,16 +12,62 @@
 // hook ChatMonitor.js and MessagesPage.js already use correctly — so the
 // toggle has something genuine to attach to, and "ONLINE" only ever shows
 // when it's actually true.
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
+import { api } from '../utils/api';
 
 const AdminChatControl = () => {
   const authToken = localStorage.getItem('token');
-  const { connected } = useChat({ authToken });
+  const { connected, adminOnline, requestAdminStatusUpdate } = useChat({ authToken });
+  const [availability, setAvailability] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // With REST presence toggles removed, online/offline is derived from realtime connection.
-  const trulyOnline = connected;
+  // Fetch current admin status
+  useEffect(() => {
+    const fetchAdminStatus = async () => {
+      if (!authToken) return;
+      
+      try {
+        setLoading(true);
+        const response = await api.get('/chat/admin/status');
+        if (response.data.success) {
+          setAvailability(response.data.status);
+        }
+      } catch (err) {
+        console.error('Error fetching admin status:', err);
+        setError('Failed to fetch admin status');
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    if (connected) {
+      fetchAdminStatus();
+    }
+  }, [authToken, connected]);
+
+  // Update admin availability
+  const updateAdminAvailability = async (newStatus) => {
+    if (!authToken) return;
+    
+    try {
+      setLoading(true);
+      const response = await api.patch('/chat/admin/status', { status: newStatus });
+      if (response.data.success) {
+        setAvailability(newStatus);
+        // The useChat hook will automatically receive the updated status via socket
+      }
+    } catch (err) {
+      console.error('Error updating admin status:', err);
+      setError('Failed to update admin status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // With REST presence toggles available, online/offline is derived from both connection and availability setting
+  const trulyOnline = connected && availability;
 
   return (
     <div style={{
@@ -63,6 +109,19 @@ const AdminChatControl = () => {
         }}>
           {connected ? '● Realtime connection active' : '○ Connecting to realtime server…'}
         </p>
+
+        {error && (
+          <div style={{
+            padding: '1rem',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            color: '#ef4444',
+            borderRadius: '8px',
+            marginBottom: '1rem',
+            border: '1px solid rgba(239, 68, 68, 0.3)'
+          }}>
+            {error}
+          </div>
+        )}
 
         <div style={{
           display: 'flex',
@@ -162,24 +221,43 @@ const AdminChatControl = () => {
           </div>
 
           <button
-            onClick={() => {}}
-            disabled
+            onClick={() => updateAdminAvailability(!availability)}
+            disabled={!connected || loading}
             style={{
               padding: '1rem 2rem',
               fontSize: '1.1rem',
               fontWeight: 600,
-              background: 'linear-gradient(135deg, #6b7280, #4a4a6a)',
+              background: trulyOnline
+                ? 'linear-gradient(135deg, var(--color-primary), #00b4ff)'
+                : 'linear-gradient(135deg, var(--color-accent), #ff0080)',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
-              cursor: 'not-allowed',
-              opacity: 0.6,
+              cursor: (!connected || loading) ? 'not-allowed' : 'pointer',
+              opacity: (!connected || loading) ? 0.6 : 1,
               transition: 'transform 0.2s, box-shadow 0.2s',
               minWidth: '200px'
             }}
+            title={!connected ? 'Must be connected to update availability' : ''}
           >
-            Presence is realtime-only
+            {loading ? 'Updating...' : trulyOnline ? 'Mark Unavailable' : 'Make Available'}
           </button>
+
+          <div style={{
+            textAlign: 'center',
+            padding: '1rem',
+            background: 'rgba(255, 193, 7, 0.1)',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 193, 7, 0.2)',
+            width: '100%',
+            color: 'var(--text-muted)',
+            fontSize: '0.9rem'
+          }}>
+            <p style={{ margin: 0 }}>
+              Note: Your availability status is shared across all devices on the same network.
+              When you go online, all connected clients will see the updated status.
+            </p>
+          </div>
 
         </div>
       </div>

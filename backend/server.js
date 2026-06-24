@@ -170,10 +170,13 @@ app.use('/api/tickets',       require('./routes/tickets'));
 app.use('/api/tickets',       require('./routes/publicTicketsTrack')); 
 
 app.use('/api/staff-portal',  require('./routes/staffPortal'));
+app.use('/api/staff-invitation', require('./routes/staffInvitation')); // Staff invitation system
 app.use('/api/inventory',     require('./routes/inventory'));
 app.use('/api/billing',       require('./routes/billing'));
 app.use('/api/crm',           require('./routes/crm'));
 app.use('/api/chat',          require('./routes/chat')); // Added chat routes
+
+app.use('/api/help',          require('./routes/help')); // Help Desk routes
 
 app.use('/api/email',      require('./routes/email'));
 app.use('/api/ussd',       require('./routes/ussd'));
