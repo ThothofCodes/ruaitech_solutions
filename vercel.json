@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "scope": "ruaitech-frontend",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
+}

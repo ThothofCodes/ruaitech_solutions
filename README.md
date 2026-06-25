@@ -392,11 +392,76 @@ The application can be deployed to various platforms:
 - Uses the PythonAnywhere API to reload the application
 - Supports both free and paid plans
 
-### Vercel
+### Vercel (Frontend)
 > Recommended for frontend deployment
 - Frontend deployed as a static site
 - Automatic SSL certificate
 - Global CDN distribution
+
+#### Preparing for Vercel Deployment
+
+Before deploying to Vercel, ensure you resolve dependency conflicts that may occur during the build process:
+
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
+
+2. Install dependencies with legacy peer deps flag to handle known conflicts:
+```bash
+npm install --legacy-peer-deps
+```
+
+3. Build the application locally to verify it works:
+```bash
+npm run build
+```
+
+#### Deploying to Vercel
+
+Option 1: Using Vercel CLI:
+
+1. Install the Vercel CLI:
+```bash
+npm i -g vercel
+```
+
+2. Navigate to the frontend directory:
+```bash
+cd frontend
+```
+
+3. Link your project to Vercel:
+```bash
+vercel
+```
+
+4. Set the build command to:
+```bash
+npm run vercel-build
+```
+
+5. Set the output directory to:
+```bash
+dist
+```
+
+6. Add the required environment variables:
+- `VITE_API_URL`: Your backend API URL (e.g., https://your-backend-app.onrender.com/api)
+
+7. Deploy:
+```bash
+vercel --prod
+```
+
+Option 2: Connect your GitHub repository to Vercel for automatic deployments on push.
+
+#### Vercel Configuration Notes
+
+- The project includes a [vercel.json](frontend/vercel.json) file in the frontend directory with proper routing configuration
+- The build output directory is set to `dist` (changed from `build` for Vercel compatibility)
+- Chunk splitting is configured to optimize bundle sizes
+- API routes are properly proxied to your backend service
 
 ### Heroku
 > Alternative backend deployment

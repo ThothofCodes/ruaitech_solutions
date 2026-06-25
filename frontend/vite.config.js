@@ -23,12 +23,17 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'build',
+    outDir: 'dist', // Changed from 'build' to 'dist' for Vercel compatibility
     sourcemap: false,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'router-vendor': ['react-router-dom'],
+          'socket-vendor': ['socket.io-client'],
+          'chart-vendor': ['recharts'],
+        },
       },
     },
   },
