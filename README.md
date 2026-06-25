@@ -73,17 +73,26 @@ If you encounter dependency conflicts during installation, try these solutions:
 npm ci --prefix backend
 npm ci --prefix frontend
 
-# Force reinstall with legacy peer deps (if needed)
+# Force reinstall with legacy peer deps (if needed) - this resolves the Babel/ESLint conflicts
 npm install --force --legacy-peer-deps --prefix backend
 npm install --force --legacy-peer-deps --prefix frontend
+
+# Alternative approach for handling the specific Babel/ESLint conflicts:
+cd backend && npm install --legacy-peer-deps
+cd ../frontend && npm install --legacy-peer-deps
 
 # Clear npm cache and reinstall
 npm cache clean --force
 npm install --prefix backend
 npm install --prefix frontend
+
+# For Vercel/production builds specifically encountering Babel conflicts:
+cd frontend
+npm install --save-dev @babel/core@^7.29.7  # Downgrade to compatible version
+npm install --legacy-peer-deps
 ```
 
-> **Note:** If you encounter ERESOLVE errors related to peer dependencies (especially with Babel, ESLint, or React), use the `--legacy-peer-deps` flag to bypass strict peer dependency checks.
+> **Note:** The project currently has peer dependency conflicts between Babel versions (8.0.1 vs 7.x) and ESLint versions that may cause installation failures. Using `--legacy-peer-deps` flag bypasses these conflicts by ignoring the peerDependency tree and resolving the dependencies like npm v6.
 
 ---
 
@@ -364,7 +373,6 @@ The application can be deployed to various platforms:
 - Frontend deployed as a static site
 - Automatic SSL certificate
 - Global CDN distribution
-- **Note:** Vercel may use different Node.js versions; ensure compatibility with your code
 
 ### Heroku
 > Alternative backend deployment
@@ -390,42 +398,6 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 npm install --legacy-peer-deps --prefix backend
 npm install --legacy-peer-deps --prefix frontend
 ```
-
-### Peer dependency conflicts (ERESOLVE errors)
-
-If you encounter ERESOLVE errors during installation, particularly with Babel, ESLint, or React dependencies:
-
-```bash
-# Clean install with legacy peer deps
-npm ci --legacy-peer-deps --prefix backend
-npm ci --legacy-peer-deps --prefix frontend
-
-# Or force installation ignoring peer dependencies
-npm install --force --prefix backend
-npm install --force --prefix frontend
-
-# For specific errors with @babel/core or eslint
-npm install --legacy-peer-deps --save-dev @babel/core@latest @babel/eslint-parser@latest
-```
-
-> **Note:** These errors commonly occur due to version mismatches between Babel 7.x and 8.x versions or conflicting ESLint peer dependencies.
-
-### Test failures
-
-If you encounter test failures, particularly with socket presence manager tests:
-
-```bash
-# Run tests with verbose output
-npm test -- --verbose
-
-# Run only specific test files
-npm test __tests__/presence.manager.test.js
-
-# Run tests with coverage to see more details
-npm test -- --coverage
-```
-
-> **Note:** Some tests may fail due to timing issues or state management in socket connections. If tests pass when run individually but fail in the full suite, consider running them separately.
 
 ### Backend crashes on startup
 
