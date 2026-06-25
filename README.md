@@ -321,8 +321,10 @@ The project includes a comprehensive CI/CD pipeline using GitHub Actions:
   - **Frontend**: Linting (ESLint), type checking (TypeScript), component tests (Vitest), and production build validation
   - Security scanning with npm audit
   - Code coverage reports
+  - End-to-end simulation smoke tests with MongoDB service
+  - Code quality checks
 - Uses Node.js v20.x with dependency caching for faster builds
-- Runs tests with a dedicated test database connection
+- Runs tests with a dedicated test database connection (mongodb://localhost:27017/ruaitech_ci_test)
 
 ### CD (Continuous Deployment)
 - Runs on every push to `main` branch, manual triggers, and published releases
@@ -348,6 +350,28 @@ The project includes a comprehensive CI/CD pipeline using GitHub Actions:
 - Builds and pushes both backend and frontend Docker images
 - Tags images with commit SHA and latest tag
 - Uses build caching for faster deployments
+
+### Common CI/CD Issues and Solutions
+
+#### Backend Test Failures
+- Ensure all environment variables are properly set for CI tests
+- Check that JWT_SECRET, NODE_ENV, and MONGO_URI are configured for the test environment
+- Verify that all backend dependencies are correctly installed with `npm ci`
+
+#### Frontend Build Failures
+- Verify that VITE_API_URL is set during build process
+- Check that all frontend dependencies are properly installed
+- Ensure that the build process can resolve all imports and dependencies
+
+#### Security Scan Failures
+- Address moderate and high severity vulnerabilities with `npm audit fix`
+- Review Trivy security scan results and update vulnerable packages
+- Consider using `npm audit --audit-level=moderate` to identify specific issues
+
+#### Dependency Installation Conflicts
+- Use `npm ci` instead of `npm install` for consistent dependency resolution
+- The pipeline uses `--legacy-peer-deps` flag to handle known Babel/ESLint peer dependency conflicts
+- Clear npm cache periodically: `npm cache clean --force`
 
 ### Configuration
 - Located in `.github/workflows/ci.yml` and `.github/workflows/cd.yml`
@@ -398,6 +422,31 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 npm install --legacy-peer-deps --prefix backend
 npm install --legacy-peer-deps --prefix frontend
 ```
+
+### CI/CD Pipeline Failures
+
+#### Backend lint, test, audit failures
+- Run local tests before pushing: `npm test` in the backend directory
+- Check linting issues: `npm run lint` (if available)
+- Verify all environment variables are properly set for tests
+- Make sure all required dependencies are listed in package.json
+
+#### Frontend lint, test, build failures
+- Run local build: `npm run build` in the frontend directory
+- Check for TypeScript/JavaScript errors: `npx tsc --noEmit` 
+- Verify all imports are properly resolved
+- Run component tests: `npm test` in the frontend directory
+
+#### Security scan failures
+- Update vulnerable packages: `npm audit fix`
+- Check for high severity vulnerabilities: `npm audit --audit-level=high`
+- Review security warnings and address critical issues before merging
+
+#### Vercel deployment failures
+- Verify frontend builds successfully: `npm run build` in frontend directory
+- Check environment variables are properly configured in Vercel dashboard
+- Ensure all dependencies are in production dependencies, not devDependencies
+- Try clearing build cache in Vercel dashboard if persistent build errors occur
 
 ### Backend crashes on startup
 
