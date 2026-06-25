@@ -83,6 +83,43 @@ npm install --prefix backend
 npm install --prefix frontend
 ```
 
+#### Common Build Issues and Fixes
+
+If you encounter build failures due to peer dependency conflicts like:
+
+```
+npm error ERESOLVE could not resolve
+npm error While resolving: @eslint/js@10.0.1
+npm error Found: eslint@9.39.4
+npm error node_modules/eslint
+```
+
+Use these commands to resolve them:
+
+```bash
+# For frontend build issues
+cd frontend
+npm install --legacy-peer-deps
+npm run build
+
+# For backend build issues
+cd backend
+npm install --legacy-peer-deps
+npm run build
+
+# Or use the root installation command with legacy peer deps
+npm run install:all -- --legacy-peer-deps
+```
+
+#### For CI/CD Pipeline Failures
+
+When deploying to platforms like Vercel, if you encounter dependency resolution errors:
+
+```bash
+# Set build command with legacy peer deps flag
+npm install --legacy-peer-deps && npm run build
+```
+
 ---
 
 ## 3. Environment Setup
@@ -461,4 +498,4 @@ ruaitech_solutions/
 ---
 
 © 2026 Ruai Tech Solutions · Ruai Town Centre, Nairobi County, Kenya  
-Super Administrator: **Thoth of Codes** · `codeofthoth@outlook.com` · [github.com/3mutua](https://github.com/3mutua)
+Super Administrator: **Thoth of Codes** · `codeofthoth@outlook.com` · [github.com/3mutua](https://github.com/ThothofCodes)
