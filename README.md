@@ -62,6 +62,27 @@ Or using the single convenience command:
 npm run install:all
 ```
 
+> **Note:** If you are on a slow connection or want faster subsequent installations, use `npm install --prefer-offline` after the first install to avoid re-downloading packages.
+
+### Resolving Dependency Conflicts
+
+If you encounter dependency conflicts during installation, try these solutions:
+
+```bash
+# Clean install without cache
+npm ci --prefix backend
+npm ci --prefix frontend
+
+# Force reinstall with legacy peer deps (if needed)
+npm install --force --legacy-peer-deps --prefix backend
+npm install --force --legacy-peer-deps --prefix frontend
+
+# Clear npm cache and reinstall
+npm cache clean --force
+npm install --prefix backend
+npm install --prefix frontend
+```
+
 ---
 
 ## 3. Environment Setup
@@ -285,23 +306,43 @@ The project includes a comprehensive CI/CD pipeline using GitHub Actions:
 ### CI (Continuous Integration)
 - Runs on every push and pull request to `main` and `develop` branches
 - Includes:
-  - Backend: Linting, testing, security audits, syntax validation
-  - Frontend: Linting, testing, building, security audits
-  - End-to-end simulation smoke tests
-  - Security scanning with Trivy
-  - Code quality checks
+  - **Backend**: Linting, testing (Jest), security audits (npm audit), syntax validation, and parsing checks for server.js and seed.js
+  - **Frontend**: Linting (ESLint), type checking (TypeScript), component tests (Vitest), and production build validation
+  - Security scanning with npm audit
+  - Code coverage reports
+- Uses Node.js v20.x with dependency caching for faster builds
+- Runs tests with a dedicated test database connection
 
 ### CD (Continuous Deployment)
-- Runs on every push to `main` branch
+- Runs on every push to `main` branch, manual triggers, and published releases
 - Supports multiple deployment targets:
-  - PythonAnywhere (primary backend)
-  - Vercel (frontend)
-  - Heroku (alternative backend)
-  - Docker Hub (container images)
+
+#### 1. PythonAnywhere (Primary Backend)
+- Requires secrets: `PYTHONANYWHERE_API_TOKEN`, `PYTHONANYWHERE_USERNAME`, `PYTHONANYWHERE_DOMAIN`, `PYTHONANYWHERE_HOST`
+- Optional for paid accounts: `PYTHONANYWHERE_SSH_PRIVATE_KEY` for direct code sync via rsync
+- Optional for free accounts: `PYTHONANYWHERE_CONSOLE_ID` for code sync via Console API
+- Automatically reloads the web application after deployment
+
+#### 2. Vercel (Frontend)
+- Requires secrets: `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID`, `VITE_API_URL`
+- Deploys frontend as a static site with automatic SSL and global CDN
+
+#### 3. Heroku (Alternative Backend)
+- Requires secrets: `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`
+- Environment variables are securely passed during deployment
+- Includes rollback capability on health check failure
+
+#### 4. Docker Hub (Container Images)
+- Requires secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+- Builds and pushes both backend and frontend Docker images
+- Tags images with commit SHA and latest tag
+- Uses build caching for faster deployments
 
 ### Configuration
-- Located in `.github/workflows/`
+- Located in `.github/workflows/ci.yml` and `.github/workflows/cd.yml`
 - Requires secrets to be configured in GitHub repository settings
+- Uses environment protection rules for production deployments
+- Supports conditional deployment based on available secrets
 - See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup instructions
 
 ---
