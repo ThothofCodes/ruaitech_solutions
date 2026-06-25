@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 
 const DepartmentSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  slug: { type: String, required: true, unique: true, lowercase: true },
+  slug: {
+    type: String, required: true, unique: true, lowercase: true,
+  },
   description: String,
   contactEmail: String,
   contactPhone: String,

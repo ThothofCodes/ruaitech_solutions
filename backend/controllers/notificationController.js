@@ -25,16 +25,22 @@ exports.markRead = async (req, res, next) => {
 
 exports.broadcast = async (req, res, next) => {
   try {
-    const { title, message, type = 'broadcast', departmentId } = req.body;
+    const {
+      title, message, type = 'broadcast', departmentId,
+    } = req.body;
     const notification = await Notification.create({
-      title, message, type,
+      title,
+      message,
+      type,
       department: departmentId || null,
       recipient: null,
       createdBy: req.user._id,
     });
     // Real-time: push to all connected clients or specific dept
     try {
-      const payload = { _id: notification._id, title, message, type, createdAt: notification.createdAt };
+      const payload = {
+        _id: notification._id, title, message, type, createdAt: notification.createdAt,
+      };
       if (!departmentId) {
         emitBroadcast(payload);
       } else {

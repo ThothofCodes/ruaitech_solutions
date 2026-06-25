@@ -1,7 +1,9 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 // Structured logger for production-grade logging
 
-const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
+const levels = {
+  ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3,
+};
 const currentLevel = process.env.LOG_LEVEL ? levels[process.env.LOG_LEVEL] : levels.INFO;
 
 function format(level, message, data = null) {

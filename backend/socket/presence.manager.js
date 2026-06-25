@@ -31,7 +31,7 @@ const presenceManager = {
       console.error('[PRESENCE] Invalid parameters in adminConnected:', { adminId, socketId });
       throw new Error('adminId and socketId must be defined and not null');
     }
-    
+
     try {
       if (!adminSockets.has(adminId)) {
         adminSockets.set(adminId, new Set());
@@ -47,19 +47,19 @@ const presenceManager = {
         role: meta.role || adminMeta.get(adminId)?.role || null,
         name: meta.name || adminMeta.get(adminId)?.name || null,
       });
-      
+
       // Set default availability to true when admin connects
       if (!adminAvailability.has(adminId)) {
         adminAvailability.set(adminId, true);
       }
-      
+
       console.log(`[PRESENCE] Admin ${adminId} connected with socket ${socketId}. Total sockets: ${adminSockets.get(adminId).size}. Dept: ${adminMeta.get(adminId).departmentSlug || 'n/a'}, SuperAdmin: ${adminMeta.get(adminId).isSuperAdmin}. Available: ${this.isAdminAvailable(adminId)}`);
       console.log(`[PRESENCE] Total connected admins: ${this.onlineAdminCount()}`);
     } catch (error) {
       console.error(`[PRESENCE] Error in adminConnected: ${error.message}`, {
         error,
         adminId,
-        socketId
+        socketId,
       });
       throw error;
     }
@@ -76,7 +76,7 @@ const presenceManager = {
       console.error('[PRESENCE] Invalid parameters in adminDisconnected:', { adminId, socketId });
       throw new Error('adminId and socketId must be defined and not null');
     }
-    
+
     try {
       const sockets = adminSockets.get(adminId);
       if (sockets) {
@@ -95,7 +95,7 @@ const presenceManager = {
       console.error(`[PRESENCE] Error in adminDisconnected: ${error.message}`, {
         error,
         adminId,
-        socketId
+        socketId,
       });
       throw error;
     }
@@ -161,6 +161,10 @@ const presenceManager = {
     try {
       for (const [adminId, sockets] of adminSockets) {
         if (sockets.size === 0) continue; // Check physical connection only
+
+        // Check if admin is available (not marked as unavailable)
+        if (!this.isAdminAvailable(adminId)) continue;
+
         const meta = adminMeta.get(adminId);
         if (!meta) continue;
         if (meta.isSuperAdmin) return true; // highest clearance — covers every department
@@ -227,12 +231,12 @@ const presenceManager = {
       console.error('[PRESENCE] Invalid socketId in addPendingCallback');
       throw new Error('socketId must be provided');
     }
-    
+
     if (!clientData || typeof clientData !== 'object') {
       console.error('[PRESENCE] Invalid clientData in addPendingCallback', { clientData });
       throw new Error('clientData must be a valid object');
     }
-    
+
     try {
       pendingCallbacks.set(socketId, { ...clientData, requestedAt: new Date() });
       console.debug(`[PRESENCE] Added pending callback for socket ${socketId}`);
@@ -240,7 +244,7 @@ const presenceManager = {
       console.error(`[PRESENCE] Error in addPendingCallback: ${error.message}`, {
         error,
         socketId,
-        clientData
+        clientData,
       });
       throw error;
     }
@@ -262,7 +266,7 @@ const presenceManager = {
       console.error('[PRESENCE] Invalid socketId in removePendingCallback');
       throw new Error('socketId must be provided');
     }
-    
+
     try {
       const exists = pendingCallbacks.has(socketId);
       pendingCallbacks.delete(socketId);
@@ -271,7 +275,7 @@ const presenceManager = {
     } catch (error) {
       console.error(`[PRESENCE] Error in removePendingCallback: ${error.message}`, {
         error,
-        socketId
+        socketId,
       });
       throw error;
     }
@@ -288,18 +292,18 @@ const presenceManager = {
       throw error;
     }
   },
-  
+
   // New methods for managing admin availability
   setAdminAvailability(adminId, available) {
     if (adminId === undefined || adminId === null || typeof available !== 'boolean') {
       console.error('[PRESENCE] Invalid parameters in setAdminAvailability:', { adminId, available });
       throw new Error('adminId and available must be provided and available must be boolean');
     }
-    
+
     try {
       adminAvailability.set(adminId, available);
       console.log(`[PRESENCE] Admin ${adminId} availability set to ${available}`);
-      
+
       // Log the impact on overall admin status
       console.log(`[PRESENCE] After availability change for admin ${adminId}, total available admins: ${this.onlineAdminCount()}`);
       console.log(`[PRESENCE] Overall admin status: ${this.isAnyAdminOnline() ? 'ONLINE' : 'OFFLINE'}`);
@@ -307,12 +311,12 @@ const presenceManager = {
       console.error(`[PRESENCE] Error in setAdminAvailability: ${error.message}`, {
         error,
         adminId,
-        available
+        available,
       });
       throw error;
     }
   },
-  
+
   isAdminAvailable(adminId) {
     try {
       // If admin hasn't set availability preference, default to true
@@ -322,7 +326,7 @@ const presenceManager = {
       throw error;
     }
   },
-  
+
   getAdminAvailability(adminId) {
     try {
       return adminAvailability.get(adminId) ?? true;
@@ -331,7 +335,7 @@ const presenceManager = {
       throw error;
     }
   },
-  
+
   // Method to check if admin is truly connected across devices/networks
   isSpecificAdminOnline(adminId) {
     try {
@@ -344,7 +348,7 @@ const presenceManager = {
       throw error;
     }
   },
-  
+
   // Method to get all socket IDs for a specific admin
   getAdminSocketIds(adminId) {
     try {
@@ -356,7 +360,7 @@ const presenceManager = {
       console.error(`[PRESENCE] Error in getAdminSocketIds: ${error.message}`, { error, adminId });
       throw error;
     }
-  }
+  },
 };
 
 module.exports = {
@@ -377,5 +381,5 @@ module.exports = {
       console.error(`[PRESENCE] Error generating admin connections snapshot: ${error.message}`, { error });
       throw error;
     }
-  }
+  },
 };

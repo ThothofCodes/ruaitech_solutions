@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
-    host: true,
+    host: '0.0.0.0', // Bind to all network interfaces for public access
     proxy: {
       '/api': {
         target: 'http://localhost:5001',
@@ -28,11 +28,19 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'router-vendor': ['react-router-dom'],
-          'socket-vendor': ['socket.io-client'],
-          'chart-vendor': ['recharts'],
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('react')) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules/react-router-dom')) {
+            return 'router-vendor';
+          }
+          if (id.includes('node_modules/socket.io-client')) {
+            return 'socket-vendor';
+          }
+          if (id.includes('node_modules/recharts')) {
+            return 'chart-vendor';
+          }
         },
       },
     },

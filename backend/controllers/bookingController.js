@@ -14,8 +14,12 @@ const buildFilter = async (req, extra = {}) => {
   if (['STAFF', 'staff'].includes(role) && req.user.departmentSlug) {
     // Find service IDs that belong to this dept's category
     const deptCategoryMap = {
-      internet: 'internet', webdev: 'web-dev', playstation: 'gaming',
-      repair: 'hardware', cybersecurity: 'cybersecurity', govadmin: 'other',
+      internet: 'internet',
+      webdev: 'web-dev',
+      playstation: 'gaming',
+      repair: 'hardware',
+      cybersecurity: 'cybersecurity',
+      govadmin: 'other',
     };
     const category = deptCategoryMap[req.user.departmentSlug];
     if (category) {
@@ -28,7 +32,9 @@ const buildFilter = async (req, extra = {}) => {
 
 exports.getBookings = async (req, res, next) => {
   try {
-    const { status, paymentStatus, page = 1, limit = 20 } = req.query;
+    const {
+      status, paymentStatus, page = 1, limit = 20,
+    } = req.query;
     const extra = {};
     if (status) extra.status = status;
     if (paymentStatus) extra.paymentStatus = paymentStatus;
@@ -36,10 +42,14 @@ exports.getBookings = async (req, res, next) => {
 
     const [bookings, total] = await Promise.all([
       Booking.find(filter).populate('client', 'name phone').populate('service', 'name category')
-        .sort('-createdAt').skip((page - 1) * limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? Booking.countDocuments(filter) : Promise.resolve(0),
+        .sort('-createdAt')
+        .skip((page - 1) * limit)
+        .limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? Booking.countDocuments(filter) : Promise.resolve(0),
     ]);
-    res.json({ bookings, total, page: Number(page), pages: Math.ceil(total / limit) });
+    res.json({
+      bookings, total, page: Number(page), pages: Math.ceil(total / limit),
+    });
   } catch (err) { next(err); }
 };
 
@@ -77,15 +87,19 @@ exports.recordPayment = async (req, res, next) => {
     const booking = await Booking.findByIdAndUpdate(
       req.params.id,
       { paymentStatus: 'paid', paymentMethod, mpesaRef },
-      { new: true }
+      { new: true },
     ).populate('client', 'name phone').populate('service', 'name');
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
     if (!booking.client || !booking.service) return res.status(400).json({ message: 'Booking has missing client or service reference' });
 
     await Revenue.create({
-      type: 'income', category: 'booking',
+      type: 'income',
+      category: 'booking',
       description: `${booking.service.name} — ${booking.client.name}`,
-      amount: parsedAmount, paymentMethod, reference: mpesaRef, createdBy: req.user._id,
+      amount: parsedAmount,
+      paymentMethod,
+      reference: mpesaRef,
+      createdBy: req.user._id,
     });
     await Service.findByIdAndUpdate(booking.service._id, { $inc: { totalRevenue: parsedAmount } });
     await Client.findByIdAndUpdate(booking.client._id, { $inc: { totalSpent: parsedAmount } });

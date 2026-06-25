@@ -1,13 +1,14 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 require('dotenv').config();
-const express    = require('express');
-const cors       = require('cors');
-const helmet     = require('helmet');
-const rateLimit  = require('express-rate-limit');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
-const hpp        = require('hpp');
-const mongoose   = require('mongoose');
-const connectDB  = require('./config/db');
+const hpp = require('hpp');
+const mongoose = require('mongoose');
+const http = require('http');
+const connectDB = require('./config/db');
 const setupIndexes = require('./utils/setupIndexes');
 
 mongoose.set('bufferCommands', false);
@@ -20,8 +21,8 @@ process.on('unhandledRejection', (err) => {
 connectDB().then(() => {
   try {
     require('./cron/jobs')();
-    setupIndexes().catch(e => console.error('Index setup warning:', e.message));
-  } catch(e) {
+    setupIndexes().catch((e) => console.error('Index setup warning:', e.message));
+  } catch (e) {
     const logger = require('./utils/logger');
     logger.error('Startup error', { message: e.message });
   }
@@ -43,10 +44,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:     ["'self'", 'data:', 'https://res.cloudinary.com'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'],
       connectSrc: ["'self'", MPESA_CSP_HOST],
     },
   },
@@ -117,7 +118,7 @@ const authLimiter = rateLimit({
   message: { message: 'Too many login attempts, please try again after 15 minutes' },
   skipSuccessfulRequests: true,
 });
-app.use('/api/auth/login',    authLimiter);
+app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
 // ── 7a. Chat and callback rate limiter — 20 requests / 1 hour ────────────────
@@ -130,7 +131,7 @@ const chatLimiter = rateLimit({
   keyGenerator: (req) => {
     // Use IP for unauthenticated, user ID for authenticated
     return req.user?.id || req.ip;
-  }
+  },
 });
 app.use('/api/chat/callback', chatLimiter);
 
@@ -139,9 +140,11 @@ app.use('/api/chat/callback', chatLimiter);
 
 // ── 9. Health check ─────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  const dbState  = mongoose.connection.readyState;
-  const states   = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
-  const ok       = dbState === 1;
+  const dbState = mongoose.connection.readyState;
+  const states = {
+    0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting',
+  };
+  const ok = dbState === 1;
   res.status(ok ? 200 : 503).json({
     status: ok ? 'ok' : 'degraded',
     db: states[dbState] || 'unknown',
@@ -150,37 +153,37 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── 10. API routes ───────────────────────────────────────────────────────────
-app.use('/api/auth',          require('./routes/auth'));
-app.use('/api/clients',       require('./routes/clients'));
-app.use('/api/services',      require('./routes/services'));
-app.use('/api/bookings',      require('./routes/bookings'));
-app.use('/api/products',      require('./routes/products'));
-app.use('/api/orders',        require('./routes/orders'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/services', require('./routes/services'));
+app.use('/api/bookings', require('./routes/bookings'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/orders', require('./routes/orders'));
 app.use('/api/consultations', require('./routes/consultations'));
-app.use('/api/revenue',       require('./routes/revenue'));
-app.use('/api/calculator',    require('./routes/calculator'));
-app.use('/api/payments',      require('./routes/payments'));
-app.use('/api/departments',   require('./routes/departments'));
-app.use('/api/finance',       require('./routes/finance'));
-app.use('/api/users',         require('./routes/users'));
-app.use('/api/dept',          require('./routes/deptModules'));
-app.use('/api/track',         require('./routes/track')); // Phase 9 market research — public repair status tracker, no auth
-app.use('/api/admin',         require('./routes/admin'));
-app.use('/api/tickets',       require('./routes/tickets'));
-app.use('/api/tickets',       require('./routes/publicTicketsTrack')); 
+app.use('/api/revenue', require('./routes/revenue'));
+app.use('/api/calculator', require('./routes/calculator'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/departments', require('./routes/departments'));
+app.use('/api/finance', require('./routes/finance'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/dept', require('./routes/deptModules'));
+app.use('/api/track', require('./routes/track')); // Phase 9 market research — public repair status tracker, no auth
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/tickets', require('./routes/tickets'));
+app.use('/api/tickets', require('./routes/publicTicketsTrack'));
 
-app.use('/api/staff-portal',  require('./routes/staffPortal'));
+app.use('/api/staff-portal', require('./routes/staffPortal'));
 app.use('/api/staff-invitation', require('./routes/staffInvitation')); // Staff invitation system
-app.use('/api/inventory',     require('./routes/inventory'));
-app.use('/api/billing',       require('./routes/billing'));
-app.use('/api/crm',           require('./routes/crm'));
-app.use('/api/chat',          require('./routes/chat')); // Added chat routes
+app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/billing', require('./routes/billing'));
+app.use('/api/crm', require('./routes/crm'));
+app.use('/api/chat', require('./routes/chat')); // Added chat routes
 
-app.use('/api/help',          require('./routes/help')); // Help Desk routes
+app.use('/api/help', require('./routes/help')); // Help Desk routes
 
-app.use('/api/email',      require('./routes/email'));
-app.use('/api/ussd',       require('./routes/ussd'));
-app.use('/api/analytics',  require('./routes/analytics'));
+app.use('/api/email', require('./routes/email'));
+app.use('/api/ussd', require('./routes/ussd'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // ── 11. 404 handler ──────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -190,17 +193,16 @@ app.use((req, res) => {
 app.use(require('./middleware/errorHandler'));
 
 // ── 12. Start server + Socket.io ─────────────────────────────────────────────
-const http   = require('http');
 const { initSocket } = require('./socket');
 
-const PORT      = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5001;
 const httpServer = http.createServer(app);
 
-initSocket(httpServer);    // attach Socket.io to the http server
+initSocket(httpServer); // attach Socket.io to the http server
 
 httpServer.listen(PORT, () => {
   console.log(`\n🚀  Server running on port ${PORT}`);
-  console.log(`🔌  Socket.io attached — real-time events active`);
+  console.log('🔌  Socket.io attached — real-time events active');
   console.log(`🔍  Health: http://localhost:${PORT}/api/health\n`);
 });
 

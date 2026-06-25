@@ -28,8 +28,8 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // ── JWT errors ───────────────────────────────────────────────────────────
-  if (err.name === 'JsonWebTokenError')  return res.status(401).json({ message: 'Invalid token' });
-  if (err.name === 'TokenExpiredError')  return res.status(401).json({ message: 'Session expired' });
+  if (err.name === 'JsonWebTokenError') return res.status(401).json({ message: 'Invalid token' });
+  if (err.name === 'TokenExpiredError') return res.status(401).json({ message: 'Session expired' });
 
   // ── Multer: file too large ───────────────────────────────────────────────
   if (err.code === 'LIMIT_FILE_SIZE') {

@@ -13,8 +13,9 @@ exports.getAuditLogs = async (req, res, next) => {
       filter.departmentSlug = departmentSlug;
     }
     const [logs, total] = await Promise.all([
-      AuditLog.find(filter).populate('user', 'name email').sort('-timestamp').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? AuditLog.countDocuments(filter) : Promise.resolve(0),
+      AuditLog.find(filter).populate('user', 'name email').sort('-timestamp').skip((page - 1) * limit)
+        .limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? AuditLog.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ logs, total, page: Number(page) });
   } catch (err) { next(err); }

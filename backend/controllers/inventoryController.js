@@ -1,28 +1,30 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+const { v4: uuidv4 } = require('uuid');
 const Inventory = require('../models/Inventory');
 const upload = require('../middleware/upload');
-const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
 
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 const inventoryController = {
   // Get all inventory items
   getAll: async (req, res) => {
     try {
-      const { search, category, page = 1, limit = 20 } = req.query;
+      const {
+        search, category, page = 1, limit = 20,
+      } = req.query;
       const query = {};
 
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: 'i' } },
           { sku: { $regex: search, $options: 'i' } },
-          { category: { $regex: search, $options: 'i' } }
+          { category: { $regex: search, $options: 'i' } },
         ];
       }
 
@@ -43,13 +45,13 @@ const inventoryController = {
         data: items,
         total,
         page: parseInt(page),
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
       });
     } catch (error) {
       console.error('Error getting inventory:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to get inventory items'
+        message: 'Failed to get inventory items',
       });
     }
   },
@@ -61,18 +63,18 @@ const inventoryController = {
       if (!item) {
         return res.status(404).json({
           success: false,
-          message: 'Inventory item not found'
+          message: 'Inventory item not found',
         });
       }
       res.json({
         success: true,
-        data: item
+        data: item,
       });
     } catch (error) {
       console.error('Error getting inventory item:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to get inventory item'
+        message: 'Failed to get inventory item',
       });
     }
   },
@@ -81,13 +83,13 @@ const inventoryController = {
   create: async (req, res) => {
     try {
       // Handle file uploads if any
-      let attachmentUrls = [];
+      const attachmentUrls = [];
       if (req.files && req.files.length > 0) {
         // Upload each file to Cloudinary
         for (const file of req.files) {
           const result = await cloudinary.uploader.upload(file.path, {
             folder: 'inventory_attachments',
-            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`
+            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`,
           });
           attachmentUrls.push(result.secure_url);
         }
@@ -95,20 +97,20 @@ const inventoryController = {
 
       const newItem = new Inventory({
         ...req.body,
-        attachments: attachmentUrls // Add the uploaded file URLs
+        attachments: attachmentUrls, // Add the uploaded file URLs
       });
 
       await newItem.save();
 
       res.status(201).json({
         success: true,
-        data: newItem
+        data: newItem,
       });
     } catch (error) {
       console.error('Error creating inventory item:', error);
       res.status(500).json({
         success: false,
-        message: error.message || 'Failed to create inventory item'
+        message: error.message || 'Failed to create inventory item',
       });
     }
   },
@@ -121,19 +123,19 @@ const inventoryController = {
       if (!existingItem) {
         return res.status(404).json({
           success: false,
-          message: 'Inventory item not found'
+          message: 'Inventory item not found',
         });
       }
 
       // Handle file uploads if any
-      let updatedAttachmentUrls = [...(existingItem.attachments || [])]; // Keep existing attachments
-      
+      const updatedAttachmentUrls = [...(existingItem.attachments || [])]; // Keep existing attachments
+
       if (req.files && req.files.length > 0) {
         // Upload each new file to Cloudinary
         for (const file of req.files) {
           const result = await cloudinary.uploader.upload(file.path, {
             folder: 'inventory_attachments',
-            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`
+            public_id: `${uuidv4()}_${file.originalname.split('.')[0]}`,
           });
           updatedAttachmentUrls.push(result.secure_url);
         }
@@ -143,20 +145,20 @@ const inventoryController = {
         req.params.id,
         {
           ...req.body,
-          attachments: updatedAttachmentUrls // Update with combined attachments
+          attachments: updatedAttachmentUrls, // Update with combined attachments
         },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
 
       res.json({
         success: true,
-        data: updatedItem
+        data: updatedItem,
       });
     } catch (error) {
       console.error('Error updating inventory item:', error);
       res.status(500).json({
         success: false,
-        message: error.message || 'Failed to update inventory item'
+        message: error.message || 'Failed to update inventory item',
       });
     }
   },
@@ -168,18 +170,18 @@ const inventoryController = {
       if (!item) {
         return res.status(404).json({
           success: false,
-          message: 'Inventory item not found'
+          message: 'Inventory item not found',
         });
       }
       res.json({
         success: true,
-        message: 'Inventory item deleted successfully'
+        message: 'Inventory item deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting inventory item:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete inventory item'
+        message: 'Failed to delete inventory item',
       });
     }
   },
@@ -188,23 +190,23 @@ const inventoryController = {
   getLowStock: async (req, res) => {
     try {
       const items = await Inventory.find({
-        quantity: { $lte: '$reorderLevel' } // Using aggregation to compare fields
+        quantity: { $lte: '$reorderLevel' }, // Using aggregation to compare fields
       }).lean();
 
       // Since $lte with field comparison doesn't work directly in find,
       // we need to filter in memory
-      const lowStockItems = items.filter(item => item.quantity <= item.reorderLevel);
+      const lowStockItems = items.filter((item) => item.quantity <= item.reorderLevel);
 
       res.json({
         success: true,
         data: lowStockItems,
-        total: lowStockItems.length
+        total: lowStockItems.length,
       });
     } catch (error) {
       console.error('Error getting low stock items:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to get low stock items'
+        message: 'Failed to get low stock items',
       });
     }
   },
@@ -217,13 +219,13 @@ const inventoryController = {
       res.json({
         success: true,
         data: [],
-        total: 0
+        total: 0,
       });
     } catch (error) {
       console.error('Error getting expiring items:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to get expiring items'
+        message: 'Failed to get expiring items',
       });
     }
   },
@@ -231,13 +233,15 @@ const inventoryController = {
   // Record inventory movement
   recordMovement: async (req, res) => {
     try {
-      const { itemId, type, quantity, notes } = req.body;
+      const {
+        itemId, type, quantity, notes,
+      } = req.body;
 
       const item = await Inventory.findById(itemId);
       if (!item) {
         return res.status(404).json({
           success: false,
-          message: 'Inventory item not found'
+          message: 'Inventory item not found',
         });
       }
 
@@ -258,7 +262,7 @@ const inventoryController = {
         default:
           return res.status(400).json({
             success: false,
-            message: 'Invalid movement type'
+            message: 'Invalid movement type',
           });
       }
 
@@ -266,7 +270,7 @@ const inventoryController = {
       if (newQuantity < 0) {
         return res.status(400).json({
           success: false,
-          message: 'Insufficient stock for this movement'
+          message: 'Insufficient stock for this movement',
         });
       }
 
@@ -274,7 +278,7 @@ const inventoryController = {
       const updatedItem = await Inventory.findByIdAndUpdate(
         itemId,
         { quantity: newQuantity },
-        { new: true }
+        { new: true },
       );
 
       // Here you could also log the movement in a separate collection if needed
@@ -283,16 +287,16 @@ const inventoryController = {
       res.json({
         success: true,
         data: updatedItem,
-        message: `Movement recorded: ${type} of ${quantity} units`
+        message: `Movement recorded: ${type} of ${quantity} units`,
       });
     } catch (error) {
       console.error('Error recording movement:', error);
       res.status(500).json({
         success: false,
-        message: error.message || 'Failed to record movement'
+        message: error.message || 'Failed to record movement',
       });
     }
-  }
+  },
 };
 
 module.exports = inventoryController;

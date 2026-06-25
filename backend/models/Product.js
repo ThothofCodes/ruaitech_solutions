@@ -16,7 +16,9 @@ const ProductSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   featured: { type: Boolean, default: false },
   tags: { type: [String], default: [] },
-  rating: { type: Number, default: 0, min: 0, max: 5 },
+  rating: {
+    type: Number, default: 0, min: 0, max: 5,
+  },
   reviewCount: { type: Number, default: 0 },
   soldCount: { type: Number, default: 0 },
   sku: { type: String, sparse: true, unique: true },

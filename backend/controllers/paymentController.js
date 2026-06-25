@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const { validateCallback } = require('../middleware/mpesa');
-const Order        = require('../models/Order');
+const Order = require('../models/Order');
 const Consultation = require('../models/Consultation');
-const Client       = require('../models/Client');
-const Revenue      = require('../models/Revenue');
-const { sendSMS }  = require('../config/africastalking');
+const Client = require('../models/Client');
+const Revenue = require('../models/Revenue');
+const { sendSMS } = require('../config/africastalking');
 
-const sanitizeRef = (r) => r ? String(r).replace(/[^A-Z0-9]/gi,'').slice(0,20) : undefined;
+const sanitizeRef = (r) => (r ? String(r).replace(/[^A-Z0-9]/gi, '').slice(0, 20) : undefined);
 
 exports.mpesaCallback = async (req, res) => {
   // Always respond 200 immediately — Safaricom requires response within 5 seconds
@@ -27,9 +27,9 @@ exports.mpesaCallback = async (req, res) => {
       return;
     }
 
-    const order        = await Order.findOne({ checkoutRequestId });
+    const order = await Order.findOne({ checkoutRequestId });
     const consultation = !order ? await Consultation.findOne({ checkoutRequestId }).populate('client') : null;
-    const record       = order || consultation;
+    const record = order || consultation;
     if (!record) return;
 
     // Prevent replay — only process if still unpaid
@@ -41,17 +41,17 @@ exports.mpesaCallback = async (req, res) => {
     if (resultCode === 0) {
       const mpesaRef = sanitizeRef(meta.MpesaReceiptNumber);
       record.paymentStatus = 'paid';
-      record.mpesaRef      = mpesaRef;
+      record.mpesaRef = mpesaRef;
       await record.save();
 
       const isOrder = !!order;
       await Revenue.create({
-        type:          'income',
-        category:      isOrder ? 'order' : 'consultation',
-        description:   isOrder ? `Order ${order.orderNumber}` : `Consultation ${consultation._id}`,
-        amount:        isOrder ? order.total : consultation.fee,
+        type: 'income',
+        category: isOrder ? 'order' : 'consultation',
+        description: isOrder ? `Order ${order.orderNumber}` : `Consultation ${consultation._id}`,
+        amount: isOrder ? order.total : consultation.fee,
         paymentMethod: 'mpesa',
-        reference:     mpesaRef,
+        reference: mpesaRef,
       });
 
       if (isOrder) {

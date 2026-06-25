@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Department = require('../models/Department');
 
 const isSuperAdmin = (user) => user.role === 'SUPER_ADMIN';
-const isDeptHead   = (user) => user.role === 'DEPT_HEAD_OWNER';
+const isDeptHead = (user) => user.role === 'DEPT_HEAD_OWNER';
 
 exports.getUsers = async (req, res, next) => {
   try {
@@ -28,7 +28,9 @@ exports.getUsers = async (req, res, next) => {
 
 exports.createUser = async (req, res, next) => {
   try {
-    const { name, email, password, role, departmentSlug, isOwner } = req.body;
+    const {
+      name, email, password, role, departmentSlug, isOwner,
+    } = req.body;
 
     // Block SUPER_ADMIN creation entirely
     if (role === 'SUPER_ADMIN') {
@@ -56,7 +58,9 @@ exports.createUser = async (req, res, next) => {
 
     const finalRole = isDeptHead(req.user) ? 'STAFF' : (role || 'STAFF');
     const user = await User.create({
-      name, email, password,
+      name,
+      email,
+      password,
       role: finalRole,
       department,
       departmentSlug: targetSlug,
@@ -64,7 +68,9 @@ exports.createUser = async (req, res, next) => {
     });
 
     res.status(201).json({
-      id: user._id, name, email,
+      id: user._id,
+      name,
+      email,
       role: user.role,
       departmentSlug: user.departmentSlug,
     });
@@ -91,7 +97,9 @@ exports.updateUser = async (req, res, next) => {
       }
     }
 
-    const { name, role, departmentSlug, isOwner, isActive } = req.body;
+    const {
+      name, role, departmentSlug, isOwner, isActive,
+    } = req.body;
     if (role === 'SUPER_ADMIN') return res.status(403).json({ message: 'Cannot assign SUPER_ADMIN role' });
 
     if (isSuperAdmin(req.user) && departmentSlug) {
@@ -104,7 +112,9 @@ exports.updateUser = async (req, res, next) => {
     if (isActive !== undefined) user.isActive = isActive;
     await user.save();
 
-    res.json({ id: user._id, name: user.name, email: user.email, role: user.role, departmentSlug: user.departmentSlug });
+    res.json({
+      id: user._id, name: user.name, email: user.email, role: user.role, departmentSlug: user.departmentSlug,
+    });
   } catch (err) { next(err); }
 };
 

@@ -1,11 +1,11 @@
-const { emitSessionUpdate } = require('../socket');
 const mongoose = require('mongoose');
+const { emitSessionUpdate } = require('../socket');
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const JobCard    = require('../models/JobCard');
-const PSSession  = require('../models/PSSession');
+const JobCard = require('../models/JobCard');
+const PSSession = require('../models/PSSession');
 const WebProject = require('../models/WebProject');
-const GovDocument= require('../models/GovDocument');
-const ISPClient  = require('../models/ISPClient');
+const GovDocument = require('../models/GovDocument');
+const ISPClient = require('../models/ISPClient');
 const { sendSMS, notifyCustomer } = require('../config/africastalking');
 
 // Stage transitions worth notifying the customer about (Phase 9 market
@@ -14,10 +14,10 @@ const { sendSMS, notifyCustomer } = require('../config/africastalking');
 // Keys match JobCard's real status enum exactly: ['received', 'diagnosing',
 // 'awaiting-parts', 'in-repair', 'completed', 'collected', 'cancelled'].
 const JOBCARD_STAGE_MESSAGES = {
-  'diagnosing': (job) => `Your device (${job.jobNumber}) is now being diagnosed at Ruai Tech Solutions.`,
+  diagnosing: (job) => `Your device (${job.jobNumber}) is now being diagnosed at Ruai Tech Solutions.`,
   'awaiting-parts': (job) => `Update on your device (${job.jobNumber}): we're waiting on a part. We'll notify you once it arrives.`,
   'in-repair': (job) => `Your device (${job.jobNumber}) is now being repaired at Ruai Tech Solutions.`,
-  'completed': (job) => `Your device repair (${job.jobNumber}) is complete. Please collect at Ruai Tech Solutions.`,
+  completed: (job) => `Your device repair (${job.jobNumber}) is complete. Please collect at Ruai Tech Solutions.`,
 };
 
 // ── JOB CARDS (Hardware Repair) ────────────────────────────────────────────
@@ -27,8 +27,9 @@ exports.getJobCards = async (req, res, next) => {
     const filter = { ...req.deptFilter };
     if (status) filter.status = status;
     const [jobs, total] = await Promise.all([
-      JobCard.find(filter).populate('assignedTechnician', 'name').sort('-createdAt').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? JobCard.countDocuments(filter) : Promise.resolve(0),
+      JobCard.find(filter).populate('assignedTechnician', 'name').sort('-createdAt').skip((page - 1) * limit)
+        .limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? JobCard.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ jobs, total, page: Number(page) });
   } catch (err) { next(err); }
@@ -89,7 +90,7 @@ exports.trackJobCard = async (req, res, next) => {
     const jobNumber = (req.params.jobNumber || '').trim().toUpperCase().slice(0, 30);
     if (!jobNumber) return res.status(400).json({ message: 'Job number required' });
     const job = await JobCard.findOne({ jobNumber }).select(
-      'jobNumber deviceType deviceBrand status estimatedCost finalCost paymentStatus warrantyExpiry createdAt completedAt collectedAt'
+      'jobNumber deviceType deviceBrand status estimatedCost finalCost paymentStatus warrantyExpiry createdAt completedAt collectedAt',
     );
     if (!job) return res.status(404).json({ message: 'No repair found with that job number' });
     res.json({ job });
@@ -103,8 +104,8 @@ exports.getSessions = async (req, res, next) => {
     const filter = { ...req.deptFilter };
     if (status) filter.status = status;
     const [sessions, total] = await Promise.all([
-      PSSession.find(filter).sort('-startTime').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? PSSession.countDocuments(filter) : Promise.resolve(0),
+      PSSession.find(filter).sort('-startTime').skip((page - 1) * limit).limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? PSSession.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ sessions, total });
   } catch (err) { next(err); }
@@ -147,8 +148,9 @@ exports.getProjects = async (req, res, next) => {
     const filter = { ...req.deptFilter };
     if (status) filter.status = status;
     const [projects, total] = await Promise.all([
-      WebProject.find(filter).populate('assignedTo', 'name').sort('-createdAt').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? WebProject.countDocuments(filter) : Promise.resolve(0),
+      WebProject.find(filter).populate('assignedTo', 'name').sort('-createdAt').skip((page - 1) * limit)
+        .limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? WebProject.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ projects, total });
   } catch (err) { next(err); }
@@ -176,8 +178,8 @@ exports.getGovDocs = async (req, res, next) => {
     const filter = { ...req.deptFilter };
     if (status) filter.status = status;
     const [docs, total] = await Promise.all([
-      GovDocument.find(filter).sort('-createdAt').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? GovDocument.countDocuments(filter) : Promise.resolve(0),
+      GovDocument.find(filter).sort('-createdAt').skip((page - 1) * limit).limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? GovDocument.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ docs, total });
   } catch (err) { next(err); }
@@ -208,8 +210,8 @@ exports.getISPClients = async (req, res, next) => {
     const filter = { ...req.deptFilter };
     if (status) filter.status = status;
     const [clients, total] = await Promise.all([
-      ISPClient.find(filter).sort('name').skip((page-1)*limit).limit(Number(limit)),
-      mongoose.connection.readyState===1 ? ISPClient.countDocuments(filter) : Promise.resolve(0),
+      ISPClient.find(filter).sort('name').skip((page - 1) * limit).limit(Number(limit)),
+      mongoose.connection.readyState === 1 ? ISPClient.countDocuments(filter) : Promise.resolve(0),
     ]);
     res.json({ clients, total });
   } catch (err) { next(err); }

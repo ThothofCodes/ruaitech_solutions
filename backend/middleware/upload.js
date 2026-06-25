@@ -10,9 +10,9 @@
 // third-party storage engine involved) and upload the buffer directly to
 // Cloudinary inside the controller via the upload_stream API. This approach
 // is recommended in Cloudinary's own Node.js docs for multer@2 environments.
-const multer  = require('multer');
+const multer = require('multer');
 const streamifier = require('streamifier');
-const cloudinary  = require('../config/cloudinary');
+const cloudinary = require('../config/cloudinary');
 
 // Only holds files in memory — no disk I/O, no third-party storage engine.
 // The 5 MB limit stays the same as before.
@@ -50,7 +50,7 @@ function uploadBufferToCloudinary(buffer, folder = 'ruaitech/products') {
       (err, result) => {
         if (err) return reject(err);
         resolve({ url: result.secure_url, public_id: result.public_id });
-      }
+      },
     );
     // streamifier converts the Node.js Buffer back into a Node.js Readable
     // that Cloudinary's upload_stream can consume — this is the correct
@@ -69,7 +69,7 @@ function uploadBufferToCloudinary(buffer, folder = 'ruaitech/products') {
 async function uploadProductImages(files = []) {
   if (!files.length) return [];
   const results = await Promise.all(
-    files.map((f) => uploadBufferToCloudinary(f.buffer))
+    files.map((f) => uploadBufferToCloudinary(f.buffer)),
   );
   return results.map((r) => r.url);
 }

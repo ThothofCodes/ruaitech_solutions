@@ -2,17 +2,39 @@
 const Service = require('../models/Service');
 
 const SEED_SERVICES = [
-  { name: 'Internet Access (per hour)', category: 'internet', basePrice: 50, priceUnit: 'per hour' },
-  { name: 'Internet Access (daily)', category: 'internet', basePrice: 200, priceUnit: 'per day' },
-  { name: 'Printing (B&W per page)', category: 'printing', basePrice: 10, priceUnit: 'per page' },
-  { name: 'Printing (Colour per page)', category: 'printing', basePrice: 30, priceUnit: 'per page' },
-  { name: 'Gaming (per hour)', category: 'gaming', basePrice: 60, priceUnit: 'per hour' },
-  { name: 'Website Design (Brochure)', category: 'web-dev', basePrice: 15000, priceUnit: 'per project' },
-  { name: 'MERN Web Application', category: 'web-dev', basePrice: 40000, priceUnit: 'per project' },
-  { name: 'Cybersecurity Audit', category: 'cybersecurity', basePrice: 5000, priceUnit: 'per audit' },
-  { name: 'Laptop Repair', category: 'hardware', basePrice: 500, priceUnit: 'per repair' },
-  { name: 'IT Support (monthly)', category: 'it-support', basePrice: 8000, priceUnit: 'per month' },
-  { name: 'Social Media Management', category: 'social-media', basePrice: 6000, priceUnit: 'per month' },
+  {
+    name: 'Internet Access (per hour)', category: 'internet', basePrice: 50, priceUnit: 'per hour',
+  },
+  {
+    name: 'Internet Access (daily)', category: 'internet', basePrice: 200, priceUnit: 'per day',
+  },
+  {
+    name: 'Printing (B&W per page)', category: 'printing', basePrice: 10, priceUnit: 'per page',
+  },
+  {
+    name: 'Printing (Colour per page)', category: 'printing', basePrice: 30, priceUnit: 'per page',
+  },
+  {
+    name: 'Gaming (per hour)', category: 'gaming', basePrice: 60, priceUnit: 'per hour',
+  },
+  {
+    name: 'Website Design (Brochure)', category: 'web-dev', basePrice: 15000, priceUnit: 'per project',
+  },
+  {
+    name: 'MERN Web Application', category: 'web-dev', basePrice: 40000, priceUnit: 'per project',
+  },
+  {
+    name: 'Cybersecurity Audit', category: 'cybersecurity', basePrice: 5000, priceUnit: 'per audit',
+  },
+  {
+    name: 'Laptop Repair', category: 'hardware', basePrice: 500, priceUnit: 'per repair',
+  },
+  {
+    name: 'IT Support (monthly)', category: 'it-support', basePrice: 8000, priceUnit: 'per month',
+  },
+  {
+    name: 'Social Media Management', category: 'social-media', basePrice: 6000, priceUnit: 'per month',
+  },
 ];
 
 exports.getServices = async (req, res, next) => {

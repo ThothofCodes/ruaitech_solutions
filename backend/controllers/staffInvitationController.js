@@ -1,32 +1,34 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
+const crypto = require('crypto');
 const User = require('../models/User');
 const Department = require('../models/Department');
 const CompanyEmail = require('../models/CompanyEmail');
 const { sendEmail } = require('../config/mailer');
-const crypto = require('crypto');
 
 const isValidId = (id) => require('mongoose').Types.ObjectId.isValid(id);
 
 // Suggest email string from name + dept slug
 function suggestEmail(name, slug) {
-  const first = (name || '').toLowerCase().replace(/[^a-z]/g,'').slice(0,20) || 'user';
+  const first = (name || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 20) || 'user';
   return `${first}.${slug}@ruaitechsolutions.co.ke`;
 }
 
 // Create staff invitation
 exports.inviteStaff = async (req, res, next) => {
   try {
-    const { name, email, departmentSlug, role } = req.body;
-    
+    const {
+      name, email, departmentSlug, role,
+    } = req.body;
+
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
       return res.status(400).json({ message: 'Name must be at least 2 characters' });
     }
-    
+
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ message: 'Valid email address required' });
     }
-    
+
     if (!departmentSlug) {
       return res.status(400).json({ message: 'Department slug required' });
     }
@@ -62,7 +64,7 @@ exports.inviteStaff = async (req, res, next) => {
       password: tempPassword, // Will be changed on first login
       role: role || 'STAFF',
       department: department._id,
-      departmentSlug: departmentSlug,
+      departmentSlug,
       isActive: false, // User is inactive until they set their password
       isEmailVerified: false, // Mark as unverified initially
     });
@@ -73,14 +75,14 @@ exports.inviteStaff = async (req, res, next) => {
       companyEmail: suggestedEmail,
       linkedUserId: user._id,
       departmentId: department._id,
-      departmentSlug: departmentSlug,
+      departmentSlug,
       status: 'PENDING',
     });
 
     // Generate token for password setup
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    
+
     // Update user with password reset token
     user.passwordResetToken = hashedToken;
     user.tokenExpiry = new Date(Date.now() + 24 * 3600000); // 24 hours
@@ -116,9 +118,9 @@ exports.inviteStaff = async (req, res, next) => {
         email: user.email,
         role: user.role,
         departmentSlug: user.departmentSlug,
-        invitedAt: user.createdAt
+        invitedAt: user.createdAt,
       },
-      companyEmail: companyEmail.companyEmail
+      companyEmail: companyEmail.companyEmail,
     });
   } catch (err) {
     next(err);
@@ -129,19 +131,19 @@ exports.inviteStaff = async (req, res, next) => {
 exports.getPendingInvitations = async (req, res, next) => {
   try {
     // Dept heads can only see invitations for their department
-    const filter = req.user.role === 'DEPT_HEAD_OWNER' 
-      ? { departmentSlug: req.user.departmentSlug } 
+    const filter = req.user.role === 'DEPT_HEAD_OWNER'
+      ? { departmentSlug: req.user.departmentSlug }
       : {};
 
     const pendingUsers = await User.find({
       ...filter,
       isActive: false,
-      isEmailVerified: false
+      isEmailVerified: false,
     }).populate('department', 'name slug').select('-password').sort('-createdAt');
 
     res.json({
       invitations: pendingUsers,
-      total: pendingUsers.length
+      total: pendingUsers.length,
     });
   } catch (err) {
     next(err);
@@ -152,7 +154,7 @@ exports.getPendingInvitations = async (req, res, next) => {
 exports.resendInvitation = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    
+
     if (!isValidId(userId)) {
       return res.status(400).json({ message: 'Invalid user ID' });
     }
@@ -170,7 +172,7 @@ exports.resendInvitation = async (req, res, next) => {
     // Generate new token
     const token = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    
+
     user.passwordResetToken = hashedToken;
     user.tokenExpiry = new Date(Date.now() + 24 * 3600000); // 24 hours
     await user.save();
@@ -206,7 +208,7 @@ exports.resendInvitation = async (req, res, next) => {
 exports.cancelInvitation = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    
+
     if (!isValidId(userId)) {
       return res.status(400).json({ message: 'Invalid user ID' });
     }
@@ -260,7 +262,7 @@ exports.getStaffDirectory = async (req, res, next) => {
 
     res.json({
       staff,
-      total: staff.length
+      total: staff.length,
     });
   } catch (err) {
     next(err);

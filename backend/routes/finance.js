@@ -1,7 +1,11 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const router = require('express').Router();
-const { getIncome, getDeptBreakdown, getTransactions, createTransaction, deleteTransaction } = require('../controllers/financeController');
-const { protect, deptHeadGuard, superAdminGuard, deptScope, staffGuard } = require('../middleware/auth');
+const {
+  getIncome, getDeptBreakdown, getTransactions, createTransaction, deleteTransaction,
+} = require('../controllers/financeController');
+const {
+  protect, deptHeadGuard, superAdminGuard, deptScope, staffGuard,
+} = require('../middleware/auth');
 
 router.get('/income', protect, deptHeadGuard, deptScope, getIncome);
 router.get('/breakdown', protect, superAdminGuard, getDeptBreakdown);

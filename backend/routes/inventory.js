@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const express = require('express');
+
 const router = express.Router();
 const inventoryController = require('../controllers/inventoryController');
 const { upload } = require('../middleware/upload'); // Destructure the upload object

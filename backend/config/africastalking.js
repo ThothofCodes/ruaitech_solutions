@@ -7,7 +7,7 @@ try {
   if (process.env.AT_API_KEY && process.env.AT_USERNAME) {
     const at = AfricasTalking({
       apiKey: process.env.AT_API_KEY,
-      username: process.env.AT_USERNAME
+      username: process.env.AT_USERNAME,
     });
     sms = at.SMS;
     // WhatsApp is part of the same Africa's Talking account/SDK (see Phase 9
@@ -21,16 +21,16 @@ try {
 }
 
 const sendSMS = async (to, message) => {
-  if (!sms) { 
+  if (!sms) {
     console.log(`[SMS stub] To: ${to} | ${message}`);
-    return; 
+    return;
   }
   try {
     const recipients = Array.isArray(to) ? to : [to];
-    await sms.send({ 
-      to: recipients, 
-      message, 
-      from: process.env.AT_SENDER_ID || 'RuaiTech' 
+    await sms.send({
+      to: recipients,
+      message,
+      from: process.env.AT_SENDER_ID || 'RuaiTech',
     });
   } catch (err) {
     console.error('SMS error:', err.message);

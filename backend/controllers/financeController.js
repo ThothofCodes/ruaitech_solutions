@@ -39,11 +39,13 @@ exports.getIncome = async (req, res, next) => {
     const results = await DeptTransaction.aggregate(pipeline);
 
     // Build 12-month chart data
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const chartData = months.map((name, i) => {
-      const income  = results.filter((r) => r._id.month === i + 1 && r._id.type === 'income').reduce((s, r) => s + r.total, 0);
+      const income = results.filter((r) => r._id.month === i + 1 && r._id.type === 'income').reduce((s, r) => s + r.total, 0);
       const expense = results.filter((r) => r._id.month === i + 1 && r._id.type === 'expense').reduce((s, r) => s + r.total, 0);
-      return { name, month: i + 1, income, expense, net: income - expense };
+      return {
+        name, month: i + 1, income, expense, net: income - expense,
+      };
     });
 
     // Fetch target if dept scoped
@@ -61,13 +63,15 @@ exports.getIncome = async (req, res, next) => {
       d.target = t?.target || 0;
     });
 
-    const totalIncome  = chartData.reduce((s, d) => s + d.income, 0);
+    const totalIncome = chartData.reduce((s, d) => s + d.income, 0);
     const totalExpense = chartData.reduce((s, d) => s + d.expense, 0);
-    const growthRate   = chartData.length > 1
+    const growthRate = chartData.length > 1
       ? ((chartData[chartData.length - 1].income - chartData[0].income) / (chartData[0].income || 1) * 100).toFixed(1)
       : 0;
 
-    res.json({ chartData, totalIncome, totalExpense, netProfit: totalIncome - totalExpense, growthRate, year });
+    res.json({
+      chartData, totalIncome, totalExpense, netProfit: totalIncome - totalExpense, growthRate, year,
+    });
   } catch (err) { next(err); }
 };
 
@@ -89,7 +93,8 @@ exports.getTransactions = async (req, res, next) => {
     const filter = req.user.role === 'SUPER_ADMIN' ? {} : req.deptFilter;
     if (type) filter.type = type;
     const [transactions, total] = await Promise.all([
-      DeptTransaction.find(filter).populate('createdBy', 'name').sort('-date').skip((page - 1) * limit).limit(Number(limit)),
+      DeptTransaction.find(filter).populate('createdBy', 'name').sort('-date').skip((page - 1) * limit)
+        .limit(Number(limit)),
       DeptTransaction.countDocuments(filter),
     ]);
     res.json({ transactions, total, page: Number(page) });

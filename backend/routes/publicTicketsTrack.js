@@ -7,4 +7,3 @@ const ctrl = require('../controllers/ticketController');
 router.post('/track', ctrl.trackTicket);
 
 module.exports = router;
-

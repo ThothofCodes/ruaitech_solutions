@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const mongoose = require('mongoose');
-const Product  = require('../models/Product');
+const Product = require('../models/Product');
 // FIX: import uploadProductImages from the new upload middleware.
 // Previously, multer-storage-cloudinary stored files directly and req.files
 // arrived with a .path property containing the Cloudinary URL. With
@@ -9,60 +9,63 @@ const Product  = require('../models/Product');
 const { uploadProductImages } = require('../middleware/upload');
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
-const safePage  = (p) => Math.max(1, Math.min(Number(p) || 1, 1000));
+const safePage = (p) => Math.max(1, Math.min(Number(p) || 1, 1000));
 const safeLimit = (l) => Math.max(1, Math.min(Number(l) || 20, 100));
-const VALID_CATS = ['electronics','accessories','software','services'];
-const VALID_SORT = ['-createdAt','price','-price','-soldCount','name'];
+const VALID_CATS = ['electronics', 'accessories', 'software', 'services'];
+const VALID_SORT = ['-createdAt', 'price', '-price', '-soldCount', 'name'];
 
 const parseBody = (body) => {
-  if (typeof body.tags === 'string') body.tags = body.tags.split(',').map((t) => t.trim().slice(0,50)).filter(Boolean).slice(0,20);
-  ['isDigital','isActive','featured'].forEach((k) => {
+  if (typeof body.tags === 'string') body.tags = body.tags.split(',').map((t) => t.trim().slice(0, 50)).filter(Boolean).slice(0, 20);
+  ['isDigital', 'isActive', 'featured'].forEach((k) => {
     if (body[k] === 'true') body[k] = true;
     else if (body[k] === 'false') body[k] = false;
   });
-  if (body.price !== undefined)        body.price        = Math.max(0, Number(body.price) || 0);
+  if (body.price !== undefined) body.price = Math.max(0, Number(body.price) || 0);
   if (body.comparePrice !== undefined) body.comparePrice = Math.max(0, Number(body.comparePrice) || 0) || undefined;
-  if (body.stock !== undefined)        body.stock        = Math.max(0, Math.floor(Number(body.stock) || 0));
-  if (body.name)        body.name        = body.name.trim().slice(0,120);
-  if (body.shortDesc)   body.shortDesc   = body.shortDesc.trim().slice(0,200);
-  if (body.description) body.description = body.description.trim().slice(0,2000);
-  if (body.warranty)    body.warranty    = body.warranty.trim().slice(0,100);
+  if (body.stock !== undefined) body.stock = Math.max(0, Math.floor(Number(body.stock) || 0));
+  if (body.name) body.name = body.name.trim().slice(0, 120);
+  if (body.shortDesc) body.shortDesc = body.shortDesc.trim().slice(0, 200);
+  if (body.description) body.description = body.description.trim().slice(0, 2000);
+  if (body.warranty) body.warranty = body.warranty.trim().slice(0, 100);
   return body;
 };
 
 exports.getProducts = async (req, res, next) => {
   try {
-    const page = safePage(req.query.page), limit = safeLimit(req.query.limit);
+    const page = safePage(req.query.page); const
+      limit = safeLimit(req.query.limit);
     const sort = VALID_SORT.includes(req.query.sort) ? req.query.sort : '-createdAt';
-    let query = { isActive: true };
-    
+    const query = { isActive: true };
+
     // Handle featured products request
     if (req.query.featured === 'true') {
       query.featured = true;
     }
-    
+
     // Handle search query
     if (req.query.search) {
-      const safe = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0,100);
+      const safe = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
       query.$or = [
         { name: { $regex: safe, $options: 'i' } },
         { description: { $regex: safe, $options: 'i' } },
         { shortDesc: { $regex: safe, $options: 'i' } },
-        { tags: { $in: [new RegExp(safe, 'i')] } }
+        { tags: { $in: [new RegExp(safe, 'i')] } },
       ];
     }
-    
+
     const [products, total] = await Promise.all([
       Product.find(query)
         .sort(sort)
         .limit(limit)
         .skip((page - 1) * limit),
-      Product.countDocuments(query)
+      Product.countDocuments(query),
     ]);
-    
+
     res.json({
       products,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      pagination: {
+        page, limit, total, pages: Math.ceil(total / limit),
+      },
     });
   } catch (err) { next(err); }
 };
@@ -87,25 +90,25 @@ exports.search = async (req, res, next) => {
   try {
     const { q } = req.query;
     if (!q) return res.status(400).json({ message: 'Search query required' });
-    
-    const safeQuery = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0,100);
+
+    const safeQuery = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
     const products = await Product.find({
       isActive: true,
       $or: [
         { name: { $regex: safeQuery, $options: 'i' } },
         { description: { $regex: safeQuery, $options: 'i' } },
         { shortDesc: { $regex: safeQuery, $options: 'i' } },
-        { tags: { $in: [new RegExp(safeQuery, 'i')] } }
-      ]
+        { tags: { $in: [new RegExp(safeQuery, 'i')] } },
+      ],
     }).limit(20);
-    
+
     res.json(products);
   } catch (err) { next(err); }
 };
 
 exports.getProductBySlug = async (req, res, next) => {
   try {
-    const slug = req.params.slug?.replace(/[^a-z0-9-]/gi,'').slice(0,150);
+    const slug = req.params.slug?.replace(/[^a-z0-9-]/gi, '').slice(0, 150);
     if (!slug) return res.status(400).json({ message: 'Invalid slug' });
     const product = await Product.findOne({ slug, isActive: true });
     if (!product) return res.status(404).json({ message: 'Product not found' });
@@ -164,10 +167,18 @@ exports.seedProducts = async (req, res, next) => {
   try {
     await Product.deleteMany({});
     const SEED = [
-      { name:'Refurbished Laptop Core i5', category:'electronics', description:'Refurbished Core i5 laptop, 8GB RAM, 256GB SSD.', shortDesc:'Core i5, 8GB RAM, 256GB SSD', price:45000, comparePrice:55000, stock:5, warranty:'3 months', featured:true },
-      { name:'Wireless Mouse & Keyboard Combo', category:'accessories', description:'Wireless combo, 2.4GHz, USB receiver.', shortDesc:'Wireless combo', price:2500, stock:20 },
-      { name:'Antivirus Licence 1 Year', category:'software', description:'1 device, 1 year. Email delivery.', shortDesc:'1 device, 1 year', price:3000, isDigital:true },
-      { name:'Starter Website Package', category:'services', description:'5-page website with hosting and domain.', shortDesc:'5 pages, hosting + domain', price:15000, isDigital:true, featured:true },
+      {
+        name: 'Refurbished Laptop Core i5', category: 'electronics', description: 'Refurbished Core i5 laptop, 8GB RAM, 256GB SSD.', shortDesc: 'Core i5, 8GB RAM, 256GB SSD', price: 45000, comparePrice: 55000, stock: 5, warranty: '3 months', featured: true,
+      },
+      {
+        name: 'Wireless Mouse & Keyboard Combo', category: 'accessories', description: 'Wireless combo, 2.4GHz, USB receiver.', shortDesc: 'Wireless combo', price: 2500, stock: 20,
+      },
+      {
+        name: 'Antivirus Licence 1 Year', category: 'software', description: '1 device, 1 year. Email delivery.', shortDesc: '1 device, 1 year', price: 3000, isDigital: true,
+      },
+      {
+        name: 'Starter Website Package', category: 'services', description: '5-page website with hosting and domain.', shortDesc: '5 pages, hosting + domain', price: 15000, isDigital: true, featured: true,
+      },
     ];
     const products = await Product.insertMany(SEED);
     res.status(201).json({ message: `${products.length} products seeded` });

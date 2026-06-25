@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const express = require('express');
+
 const router = express.Router();
 const chatController = require('../controllers/chatController');
 const { protect } = require('../middleware/auth');
@@ -13,7 +14,6 @@ router.post('/callback', chatController.createCallbackRequest);
 
 // Protected routes for admins
 router.use(protect); // This ensures user is authenticated
-
 
 // Admin routes for chat
 router.get('/conversations', chatController.getAllConversations);

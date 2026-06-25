@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const router = require('express').Router();
-const { getPricingRules, getEstimate, updatePricingRule, seedPricingRules } = require('../controllers/calculatorController');
+const {
+  getPricingRules, getEstimate, updatePricingRule, seedPricingRules,
+} = require('../controllers/calculatorController');
 const { protect, admin } = require('../middleware/auth');
 
 router.get('/pricing-rules', getPricingRules);

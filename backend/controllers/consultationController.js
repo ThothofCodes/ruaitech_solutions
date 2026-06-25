@@ -10,9 +10,9 @@ const { sendEmail } = require('../config/mailer');
 
 const CONSULTATION_FEES = {
   'web-development': { 60: 1500, 90: 2000 },
-  'cybersecurity': { 60: 2000, 90: 3000 },
+  cybersecurity: { 60: 2000, 90: 3000 },
   'business-digitisation': { 60: 1500, 90: 2500 },
-  'networking': { 30: 800, 60: 1500 },
+  networking: { 30: 800, 60: 1500 },
   'hardware-advisory': { 30: 500, 60: 1000 },
   'social-media-strategy': { 60: 1000, 90: 1800 },
   'data-recovery': { 30: 800, 60: 1500 },
@@ -39,16 +39,21 @@ exports.getAvailability = async (req, res, next) => {
 
 exports.getConsultations = async (req, res, next) => {
   try {
-    const { status, consultationType, page = 1, limit = 20 } = req.query;
+    const {
+      status, consultationType, page = 1, limit = 20,
+    } = req.query;
     const query = {};
     if (status) query.status = status;
     if (consultationType) query.consultationType = consultationType;
     const [consultations, total] = await Promise.all([
       Consultation.find(query).populate('client', 'name phone email').sort('-createdAt')
-        .skip((page - 1) * limit).limit(Number(limit)),
+        .skip((page - 1) * limit)
+        .limit(Number(limit)),
       Consultation.countDocuments(query),
     ]);
-    res.json({ consultations, total, page: Number(page), pages: Math.ceil(total / limit) });
+    res.json({
+      consultations, total, page: Number(page), pages: Math.ceil(total / limit),
+    });
   } catch (err) { next(err); }
 };
 
@@ -62,13 +67,17 @@ exports.getConsultation = async (req, res, next) => {
 
 exports.createConsultation = async (req, res, next) => {
   try {
-    const { consultationType, duration, payNow, ...rest } = req.body;
+    const {
+      consultationType, duration, payNow, ...rest
+    } = req.body;
     // duration arrives as string from JSON; coerce to number for lookup
     const durationNum = Number(duration);
     const fee = CONSULTATION_FEES[consultationType]?.[durationNum];
     if (!fee) return res.status(400).json({ message: 'Invalid consultation type or duration combination' });
 
-    const consultation = await Consultation.create({ ...rest, consultationType, duration: durationNum, fee });
+    const consultation = await Consultation.create({
+      ...rest, consultationType, duration: durationNum, fee,
+    });
     await Client.findByIdAndUpdate(rest.client, { $inc: { bookingCount: 1 } });
 
     // Fetch client once for STK push and SMS
@@ -106,15 +115,20 @@ exports.completeConsultation = async (req, res, next) => {
     const { consultantNotes, clientSummary, followUpRequired } = req.body;
     const c = await Consultation.findByIdAndUpdate(
       req.params.id,
-      { status: 'completed', consultantNotes, clientSummary, followUpRequired },
-      { new: true }
+      {
+        status: 'completed', consultantNotes, clientSummary, followUpRequired,
+      },
+      { new: true },
     ).populate('client');
     if (!c) return res.status(404).json({ message: 'Consultation not found' });
 
     await Revenue.create({
-      type: 'income', category: 'consultation',
+      type: 'income',
+      category: 'consultation',
       description: `${c.consultationType} — ${c.client?.name || 'Unknown'}`,
-      amount: c.fee, paymentMethod: 'mpesa', createdBy: req.user._id,
+      amount: c.fee,
+      paymentMethod: 'mpesa',
+      createdBy: req.user._id,
     });
     if (c.client?._id) {
       await Client.findByIdAndUpdate(c.client._id, { $inc: { totalSpent: c.fee } });
@@ -139,7 +153,7 @@ exports.cancelConsultation = async (req, res, next) => {
   try {
     const c = await Consultation.findByIdAndUpdate(req.params.id, { status: 'cancelled' }, { new: true }).populate('client');
     if (!c) return res.status(404).json({ message: 'Consultation not found' });
-    if (mongoose.connection.readyState===1) { await AvailabilitySlot.findOneAndUpdate({ consultation: c._id }, { isBooked: false, consultation: null }); }
+    if (mongoose.connection.readyState === 1) { await AvailabilitySlot.findOneAndUpdate({ consultation: c._id }, { isBooked: false, consultation: null }); }
     if (c.client?.phone) {
       sendSMS(c.client.phone, `Your consultation on ${new Date(c.preferredDate).toDateString()} has been cancelled. Contact us to reschedule.`);
     }

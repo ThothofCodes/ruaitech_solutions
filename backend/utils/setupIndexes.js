@@ -15,29 +15,29 @@ async function setupIndexes() {
     await User.collection.createIndex({ email: 1 }, { unique: true });
     await User.collection.createIndex({ role: 1 });
     await User.collection.createIndex({ departmentSlug: 1 });
-    
+
     // Order indexes
     await Order.collection.createIndex({ 'customer.phone': 1 });
     await Order.collection.createIndex({ status: 1, createdAt: -1 });
     await Order.collection.createIndex({ paymentStatus: 1 });
-    
+
     // Product indexes
     await Product.collection.createIndex({ slug: 1 });
     await Product.collection.createIndex({ category: 1 });
     await Product.collection.createIndex({ isActive: 1 });
-    
+
     // Chat indexes
     await ChatMessage.collection.createIndex({ conversationId: 1, createdAt: -1 });
     await ChatMessage.collection.createIndex({ senderType: 1 });
-    
+
     // Callback indexes
     await CallbackRequest.collection.createIndex({ status: 1, preferredTime: 1 });
     await CallbackRequest.collection.createIndex({ createdAt: -1 });
-    
+
     // Ticket indexes
     await Ticket.collection.createIndex({ status: 1, createdAt: -1 });
     await Ticket.collection.createIndex({ priority: 1 });
-    
+
     // Booking indexes
     await Booking.collection.createIndex({ status: 1, startTime: -1 });
     await Booking.collection.createIndex({ 'customer.email': 1 });

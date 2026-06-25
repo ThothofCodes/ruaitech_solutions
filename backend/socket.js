@@ -51,13 +51,13 @@ function initSocket(httpServer) {
 
   _io = new Server(httpServer, {
     cors: {
-      origin:      process.env.CLIENT_URL || 'http://localhost:3000',
-      methods:     ['GET', 'POST'],
+      origin: process.env.CLIENT_URL || 'http://localhost:3000',
+      methods: ['GET', 'POST'],
       credentials: true,
     },
     // Use polling first then upgrade — works behind proxies (PythonAnywhere)
     transports: ['polling', 'websocket'],
-    pingTimeout:  20000,
+    pingTimeout: 20000,
     pingInterval: 25000,
   });
 
@@ -65,16 +65,16 @@ function initSocket(httpServer) {
   _io.use((socket, next) => {
     try {
       const token = extractToken(socket);
-      
+
       // For public chat, we allow unauthenticated connections
       if (!token) {
         socket.isPublic = true;
         socket.data = { role: 'visitor', authenticated: false };
         return next();
       }
-      
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-      socket.user = decoded;               // { id, role, email, departmentId, departmentSlug, isOwner }
+      socket.user = decoded; // { id, role, email, departmentId, departmentSlug, isOwner }
       socket.data = {
         userId: decoded.id,
         role: decoded.role,
@@ -102,7 +102,7 @@ function initSocket(httpServer) {
     const userId = socket.user?.id || socket.data?.userId;
     const departmentSlug = socket.user?.departmentSlug || socket.data?.departmentSlug || null;
     const isSuperAdmin = isSuperAdminRole(userRole);
-    
+
     if (isAdminRole(userRole)) {
       // Register presence IMMEDIATELY on connect, tagged with department +
       // clearance level so dept-scoped presence (Ruai Pulse) works correctly.
@@ -113,14 +113,14 @@ function initSocket(httpServer) {
         name: socket.user?.email || null,
       });
       socket.isAdmin = true;
-      
+
       // Join admin room (global) and, if they belong to one, their own
       // department's admin room. SUPER_ADMIN doesn't need a department room —
       // their highest-clearance status already covers every department via
       // presenceManager.isAnyAdminOnlineForDept().
       socket.join('admin-room');
       if (departmentSlug) socket.join(`admin-room:${departmentSlug}`);
-      
+
       // Broadcast to ALL visitors that admin status may have changed
       // (since admin availability affects overall status)
       // FIXED: Ensure the status is broadcast immediately when an admin connects
@@ -136,14 +136,14 @@ function initSocket(httpServer) {
           online: presenceManager.isAnyAdminOnlineForDept(departmentSlug),
         });
       }
-      
+
       // Notify pending callback clients
       const pending = presenceManager.getPendingCallbacks();
       pending.forEach(([clientSocketId, clientData]) => {
         const clientSocket = _io.sockets.sockets.get(clientSocketId);
         if (clientSocket?.connected) {
           clientSocket.emit('admin:now-available', {
-            message: 'Support is now available. Click to start your chat.'
+            message: 'Support is now available. Click to start your chat.',
           });
           presenceManager.removePendingCallback(clientSocketId);
         }
@@ -158,7 +158,7 @@ function initSocket(httpServer) {
           // FIXED: Ensure the status is broadcast immediately when an admin disconnects
           const currentAdminStatus = presenceManager.isAnyAdminOnline();
           _io.to('public-chat').emit('admin:status', { online: currentAdminStatus });
-          
+
           if (departmentSlug) {
             _io.to(`public-chat:${departmentSlug}`).emit('admin:status:dept', {
               departmentSlug,
@@ -173,30 +173,30 @@ function initSocket(httpServer) {
         clearInterval(heartbeatInterval);
         // Remove admin socket from tracking
         presenceManager.adminDisconnected(userId, socket.id);
-        
+
         // Check if any admins are still connected and available
         // FIXED: Ensure the status is broadcast immediately when an admin disconnects
         const currentAdminStatus = presenceManager.isAnyAdminOnline();
         _io.to('public-chat').emit('admin:status', { online: currentAdminStatus });
-        
+
         if (departmentSlug) {
           _io.to(`public-chat:${departmentSlug}`).emit('admin:status:dept', {
             departmentSlug,
             online: presenceManager.isAnyAdminOnlineForDept(departmentSlug),
           });
         }
-        
+
         console.log(`[CHAT] Admin disconnected: ${socket.id} reason=${reason}`);
       });
-      
+
       console.log(`[CHAT] Admin connected: ${socket.id} (user: ${userId}, role: ${userRole})`);
-      
+
       // ── Admin chat functionality ───────────────────────────
       socket.on('admin-join-conversation', (conversationId) => {
         if (!socket.isAdmin) return;
         // Normalize conversation ID to ensure consistency
-        const normalizedConversationId = conversationId.startsWith('conversation-') 
-          ? conversationId 
+        const normalizedConversationId = conversationId.startsWith('conversation-')
+          ? conversationId
           : `conversation-${conversationId}`;
         socket.join(normalizedConversationId);
       });
@@ -206,24 +206,24 @@ function initSocket(httpServer) {
           socket.emit('chat-error', { error: 'Unauthorized to send message' });
           return;
         }
-        
+
         const { conversationId, message, guestId } = data;
-        
+
         try {
           // Save message to database - ensure consistent conversation ID format
-          const normalizedConversationId = conversationId.startsWith('conversation-') 
-            ? conversationId 
+          const normalizedConversationId = conversationId.startsWith('conversation-')
+            ? conversationId
             : `conversation-${conversationId}`;
-            
+
           const chatMessage = new ChatMessage({
             conversationId: normalizedConversationId,
             senderId: socket.user.id,
             senderType: 'admin',
-            message: message
+            message,
           });
-          
+
           await chatMessage.save();
-          
+
           // Broadcast to guest using the guest-specific room
           const normalizedGuestId = guestId.startsWith('guest-') ? guestId : `guest-${guestId}`;
           _io.to(normalizedGuestId).emit('new-chat-message', {
@@ -232,42 +232,42 @@ function initSocket(httpServer) {
               ...chatMessage.toObject(),
               // Add senderType to distinguish between admin and customer messages
               senderType: 'admin',
-              direction: 'incoming' // From guest perspective, admin messages are incoming
+              direction: 'incoming', // From guest perspective, admin messages are incoming
             },
-            guestId: guestId
+            guestId,
           });
-          
+
           // Also emit to the conversation room in case guest is connected there
           _io.to(normalizedConversationId).emit('new-chat-message', {
             conversationId: normalizedConversationId,
             message: {
               ...chatMessage.toObject(),
               senderType: 'admin',
-              direction: 'incoming' // From guest perspective, admin messages are incoming
+              direction: 'incoming', // From guest perspective, admin messages are incoming
             },
-            guestId: guestId
+            guestId,
           });
-          
+
           // Echo back to admin
-          socket.emit('message-sent', { 
+          socket.emit('message-sent', {
             messageId: chatMessage._id,
             conversationId: normalizedConversationId,
             message: {
               ...chatMessage.toObject(),
               senderType: 'admin',
-              direction: 'outgoing' // From admin perspective, admin messages are outgoing
-            }
+              direction: 'outgoing', // From admin perspective, admin messages are outgoing
+            },
           });
-          
+
           // Notify all other connected admin sockets about the new message
           _io.to('admin-room').except(socket.id).emit('new-chat-message', {
             conversationId: normalizedConversationId,
             message: {
               ...chatMessage.toObject(),
               senderType: 'admin',
-              direction: 'outgoing' // Other admins see it as outgoing from the sender
+              direction: 'outgoing', // Other admins see it as outgoing from the sender
             },
-            guestId: guestId
+            guestId,
           });
         } catch (error) {
           console.error('Error sending admin message:', error);
@@ -278,12 +278,12 @@ function initSocket(httpServer) {
       // ── VISITOR FLOW ──────────────────────────────────────────────
       // Public user joins public chat room
       socket.join('public-chat');
-      
+
       // Also join a guest-specific room for direct communication
       const guestId = socket.handshake.auth?.guestId || socket.id;
       const normalizedGuestId = guestId.startsWith('guest-') ? guestId : `guest-${guestId}`;
       socket.join(normalizedGuestId);
-      
+
       // Create and join conversation room with consistent format
       const conversationId = `conversation-${normalizedGuestId}`;
       socket.join(conversationId);
@@ -300,10 +300,10 @@ function initSocket(httpServer) {
           online: presenceManager.isAnyAdminOnlineForDept(visitorDeptSlug),
         });
       }
-      
+
       // Immediately tell this visitor the current admin status
       socket.emit('admin:status', { online: presenceManager.isAnyAdminOnline() });
-      
+
       // Additionally emit department-specific status if applicable
       if (visitorDeptSlug) {
         socket.emit('admin:status:dept', {
@@ -311,31 +311,35 @@ function initSocket(httpServer) {
           online: presenceManager.isAnyAdminOnlineForDept(visitorDeptSlug),
         });
       }
-      
+
       // Handle visitor requesting a callback
       socket.on('chat:request-callback', (data, ack) => {
-        const { clientName, message, phone, departmentSlug: requestDept } = data;
+        const {
+          clientName, message, phone, departmentSlug: requestDept,
+        } = data;
 
         if (!clientName || !message) {
           return ack?.({ success: false, error: 'Name and message are required.' });
         }
 
         presenceManager.addPendingCallback(socket.id, {
-          clientName, message, phone,
+          clientName,
+          message,
+          phone,
           departmentSlug: requestDept || visitorDeptSlug || null,
         });
         console.log(`[CHAT] Callback queued for socket ${socket.id} (${clientName})`);
-        
+
         // Check if admin becomes available while callback is pending
         if (presenceManager.isAnyAdminOnline()) {
           // Notify client that admin is now available
           socket.emit('admin:now-available', {
-            message: 'Support is now available. Click to start your chat.'
+            message: 'Support is now available. Click to start your chat.',
           });
           // Remove from pending callbacks since admin is available
           presenceManager.removePendingCallback(socket.id);
         }
-        
+
         ack?.({ success: true, message: 'We will notify you when support is available.' });
       });
 
@@ -345,9 +349,9 @@ function initSocket(httpServer) {
           socket.emit('chat-error', { error: 'Unauthorized to send message' });
           return;
         }
-        
+
         const { message, guestId } = data;
-        
+
         // Check if admin is available before allowing chat
         if (!presenceManager.isAnyAdminOnline()) {
           socket.emit('chat-error', { error: 'No admin is currently available. Please submit a callback request.' });
@@ -358,51 +362,51 @@ function initSocket(httpServer) {
           // Save message to database with consistent conversation ID format
           const conversationId = `conversation-guest-${guestId}`;
           const chatMessage = new ChatMessage({
-            conversationId: conversationId,
+            conversationId,
             senderId: guestId,
             senderType: 'customer',
-            message: message
+            message,
           });
-          
+
           await chatMessage.save();
-          
+
           // Broadcast to all admins
           _io.to('admin-room').emit('new-chat-message', {
-            conversationId: conversationId,
+            conversationId,
             message: {
               ...chatMessage.toObject(),
-              direction: 'incoming' // From admin perspective, customer messages are incoming
+              direction: 'incoming', // From admin perspective, customer messages are incoming
             },
-            guestId: guestId
+            guestId,
           });
-          
+
           // Echo back to sender (but mark as outgoing from customer perspective)
           socket.emit('new-chat-message', {
-            conversationId: conversationId,
+            conversationId,
             message: {
               ...chatMessage.toObject(),
               senderType: 'customer',
-              direction: 'outgoing' // From customer perspective, their own messages are outgoing
+              direction: 'outgoing', // From customer perspective, their own messages are outgoing
             },
-            guestId: guestId
+            guestId,
           });
-          
+
           // Echo back to sender as confirmation
-          socket.emit('message-sent', { 
+          socket.emit('message-sent', {
             messageId: chatMessage._id,
-            conversationId: conversationId,
+            conversationId,
             message: {
               ...chatMessage.toObject(),
               senderType: 'customer',
-              direction: 'outgoing'
-            }
+              direction: 'outgoing',
+            },
           });
         } catch (error) {
           console.error('Error sending visitor message:', error);
           socket.emit('chat-error', { error: 'Failed to send message' });
         }
       });
-      
+
       // Clean up pending callback if visitor disconnects before admin came online
       socket.on('disconnect', (reason) => {
         presenceManager.removePendingCallback(socket.id);
@@ -457,12 +461,12 @@ function initSocket(httpServer) {
   setInterval(() => {
     const online = presenceManager.isAnyAdminOnline();
     _io.to('public-chat').emit('admin:status', { online });
-    
+
     // Additionally broadcast to all department-specific rooms to ensure consistency
     // This ensures that clients connected to specific department rooms also get updates
     // This is particularly important for multi-device scenarios
     const allDepartmentSlugs = ['internet', 'webdev', 'playstation', 'repair', 'cybersecurity', 'govadmin'];
-    allDepartmentSlugs.forEach(deptSlug => {
+    allDepartmentSlugs.forEach((deptSlug) => {
       _io.to(`public-chat:${deptSlug}`).emit('admin:status:dept', {
         departmentSlug: deptSlug,
         online: presenceManager.isAnyAdminOnlineForDept(deptSlug),
@@ -487,8 +491,7 @@ function getIO() {
  * @param {object} payload  { _id, title, message, type, createdAt }
  */
 function emitNotification(userId, payload) {
-  try { getIO().to(`user:${userId}`).emit('notification:new', payload); }
-  catch (e) { /* socket not ready yet — graceful no-op */ }
+  try { getIO().to(`user:${userId}`).emit('notification:new', payload); } catch (e) { /* socket not ready yet — graceful no-op */ }
 }
 
 /**
@@ -497,8 +500,7 @@ function emitNotification(userId, payload) {
  * @param {object} payload
  */
 function emitDeptNotification(deptSlug, payload) {
-  try { getIO().to(`dept:${deptSlug}`).emit('notification:new', payload); }
-  catch (e) {} 
+  try { getIO().to(`dept:${deptSlug}`).emit('notification:new', payload); } catch (e) {}
 }
 
 /**
@@ -506,8 +508,7 @@ function emitDeptNotification(deptSlug, payload) {
  * @param {object} payload  { title, message, type: 'BROADCAST' }
  */
 function emitBroadcast(payload) {
-  try { getIO().emit('notification:broadcast', payload); }
-  catch (e) {}
+  try { getIO().emit('notification:broadcast', payload); } catch (e) {}
 }
 
 /**
@@ -517,8 +518,7 @@ function emitBroadcast(payload) {
  * @param {object} payload  { success, invoiceId, amount, mpesaRef }
  */
 function emitPaymentResult(checkoutRequestId, payload) {
-  try { getIO().to(`payment:${checkoutRequestId}`).emit('payment:result', payload); }
-  catch (e) {}
+  try { getIO().to(`payment:${checkoutRequestId}`).emit('payment:result', payload); } catch (e) {}
 }
 
 /**
@@ -527,8 +527,7 @@ function emitPaymentResult(checkoutRequestId, payload) {
  * @param {object} entry  { author, authorRole, message, createdAt }
  */
 function emitTicketReply(ticketId, entry) {
-  try { getIO().to(`ticket:${ticketId}`).emit('ticket:reply', entry); }
-  catch (e) {}
+  try { getIO().to(`ticket:${ticketId}`).emit('ticket:reply', entry); } catch (e) {}
 }
 
 /**
@@ -537,8 +536,7 @@ function emitTicketReply(ticketId, entry) {
  * @param {object} session   updated session document
  */
 function emitSessionUpdate(deptSlug, session) {
-  try { getIO().to(`dept:${deptSlug}`).emit('session:update', session); }
-  catch (e) {}
+  try { getIO().to(`dept:${deptSlug}`).emit('session:update', session); } catch (e) {}
 }
 
 /**
@@ -546,8 +544,7 @@ function emitSessionUpdate(deptSlug, session) {
  * @param {object} payload  { status, db, uptime }
  */
 function emitSystemStatus(payload) {
-  try { getIO().to('super:global').emit('system:status', payload); }
-  catch (e) {}
+  try { getIO().to('super:global').emit('system:status', payload); } catch (e) {}
 }
 
 module.exports = {

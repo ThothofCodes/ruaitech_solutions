@@ -2,14 +2,12 @@
 const cloudinary = require('../config/cloudinary');
 
 function receiptHTML(invoice) {
-  const items = (invoice.lineItems || []).map(item =>
-    `<tr><td>${item.description}</td><td class="r">${item.qty||1}</td>
-     <td class="r">KES ${Number(item.unitPrice||0).toLocaleString()}</td>
-     <td class="r">KES ${Number(item.total||item.unitPrice||0).toLocaleString()}</td></tr>`
-  ).join('');
+  const items = (invoice.lineItems || []).map((item) => `<tr><td>${item.description}</td><td class="r">${item.qty || 1}</td>
+     <td class="r">KES ${Number(item.unitPrice || 0).toLocaleString()}</td>
+     <td class="r">KES ${Number(item.total || item.unitPrice || 0).toLocaleString()}</td></tr>`).join('');
   const paid = Number(invoice.amountPaid || invoice.totalAmount || 0);
-  const vat  = (paid * 0.16).toFixed(2);
-  const sub  = (paid - Number(vat)).toFixed(2);
+  const vat = (paid * 0.16).toFixed(2);
+  const sub = (paid - Number(vat)).toFixed(2);
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <style>
     body{font-family:Arial,sans-serif;color:#1a2a4a;margin:0;padding:40px;font-size:13px}
@@ -40,10 +38,10 @@ function receiptHTML(invoice) {
     <div><span class="badge">✓ PAID</span></div>
   </div>
   <div class="meta">
-    <div class="meta-box"><label>Invoice ID</label><span>${invoice.invoiceId||'—'}</span></div>
-    <div class="meta-box"><label>M-Pesa Reference</label><span>${invoice.mpesaRef||'—'}</span></div>
-    <div class="meta-box"><label>Client</label><span>${invoice.client?.fullName||invoice.clientId||'—'}</span></div>
-    <div class="meta-box"><label>Payment Date</label><span>${invoice.paidAt?new Date(invoice.paidAt).toLocaleString('en-KE',{timeZone:'Africa/Nairobi'}):'—'}</span></div>
+    <div class="meta-box"><label>Invoice ID</label><span>${invoice.invoiceId || '—'}</span></div>
+    <div class="meta-box"><label>M-Pesa Reference</label><span>${invoice.mpesaRef || '—'}</span></div>
+    <div class="meta-box"><label>Client</label><span>${invoice.client?.fullName || invoice.clientId || '—'}</span></div>
+    <div class="meta-box"><label>Payment Date</label><span>${invoice.paidAt ? new Date(invoice.paidAt).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' }) : '—'}</span></div>
   </div>
   <table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Total</th></tr></thead>
   <tbody>${items}</tbody></table>
@@ -53,11 +51,11 @@ function receiptHTML(invoice) {
     <tr class="total-row"><td>TOTAL PAID:</td><td>KES ${paid.toLocaleString()}</td></tr>
   </tbody></table>
   <div style="text-align:center;margin:20px 0">
-    <div class="ref">M-Pesa Ref: ${invoice.mpesaRef||'N/A'}</div>
+    <div class="ref">M-Pesa Ref: ${invoice.mpesaRef || 'N/A'}</div>
   </div>
   <div class="footer">
     <p>This is an official receipt from Ruai Tech Solutions.</p>
-    <p>Receipt ID: REC-${invoice.invoiceId||Date.now()} | Generated: ${new Date().toLocaleString('en-KE',{timeZone:'Africa/Nairobi'})}</p>
+    <p>Receipt ID: REC-${invoice.invoiceId || Date.now()} | Generated: ${new Date().toLocaleString('en-KE', { timeZone: 'Africa/Nairobi' })}</p>
     <p>Thank you for your business! Visit us again at Ruai Town Centre.</p>
   </div>
   </body></html>`;
@@ -66,18 +64,20 @@ function receiptHTML(invoice) {
 module.exports = async function generateReceipt(invoice) {
   try {
     let puppeteer;
-    try { puppeteer = require('puppeteer'); }
-    catch (_) { puppeteer = require('puppeteer-core'); }
+    try { puppeteer = require('puppeteer'); } catch (_) { puppeteer = require('puppeteer-core'); }
 
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
     const page = await browser.newPage();
     await page.setContent(receiptHTML(invoice), { waitUntil: 'networkidle0' });
     const pdfBuffer = await page.pdf({
-      format: 'A4', printBackground: true,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '10mm', right: '10mm', bottom: '10mm', left: '10mm',
+      },
     });
     await browser.close();
 
@@ -86,9 +86,13 @@ module.exports = async function generateReceipt(invoice) {
     const dept = invoice.departmentSlug || 'general';
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: `receipts/${dept}/${year}`, resource_type: 'raw',
-          public_id: `receipt-${invoice.invoiceId || Date.now()}`, format: 'pdf' },
-        (err, result) => err ? reject(err) : resolve(result)
+        {
+          folder: `receipts/${dept}/${year}`,
+          resource_type: 'raw',
+          public_id: `receipt-${invoice.invoiceId || Date.now()}`,
+          format: 'pdf',
+        },
+        (err, result) => (err ? reject(err) : resolve(result)),
       );
       const { Readable } = require('stream');
       Readable.from(pdfBuffer).pipe(stream);

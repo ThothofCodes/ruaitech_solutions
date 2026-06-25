@@ -1,16 +1,16 @@
 // Copyright (c) 2026 Thoth of Codes. USSD Fallback Layer — Africa's Talking
-const CRMClient   = require('../models/CRMClient');
-const Invoice     = require('../models/Invoice');
-const Ticket      = require('../models/Ticket');
-const JobCard     = require('../models/JobCard');
+const CRMClient = require('../models/CRMClient');
+const Invoice = require('../models/Invoice');
+const Ticket = require('../models/Ticket');
+const JobCard = require('../models/JobCard');
 const { sendSMS } = require('../config/africastalking');
 const { stkPush } = require('../middleware/mpesa');
 
 // Simple in-memory session store (replace with Redis in production)
 const sessions = {};
 const SESSION_TTL = 180000; // 180 seconds
-const getSession  = id => sessions[id] || {};
-const setSession  = (id, data) => { sessions[id] = data; setTimeout(() => delete sessions[id], SESSION_TTL); };
+const getSession = (id) => sessions[id] || {};
+const setSession = (id, data) => { sessions[id] = data; setTimeout(() => delete sessions[id], SESSION_TTL); };
 
 function menu(text, end = false) {
   return { text, endSession: end };
@@ -19,15 +19,15 @@ function menu(text, end = false) {
 // POST /api/ussd/callback — Africa's Talking USSD handler
 exports.handle = async (req, res) => {
   const { sessionId, phoneNumber, text } = req.body;
-  const input   = (text || '').split('*');
-  const level   = input.filter(Boolean).length;
-  const last    = input[input.length - 1] || '';
+  const input = (text || '').split('*');
+  const level = input.filter(Boolean).length;
+  const last = input[input.length - 1] || '';
   const session = getSession(sessionId);
-  const phone   = String(phoneNumber).replace(/\D/g, '').replace(/^0/, '254').replace(/^\+/, '');
+  const phone = String(phoneNumber).replace(/\D/g, '').replace(/^0/, '254').replace(/^\+/, '');
   const respond = (txt, end = false) => {
     if (end) setSession(sessionId, {});
-    else     setSession(sessionId, { ...session, lastInput: last });
-    res.set('Content-Type','text/plain');
+    else setSession(sessionId, { ...session, lastInput: last });
+    res.set('Content-Type', 'text/plain');
     res.send((end ? 'END ' : 'CON ') + txt);
   };
 
@@ -35,7 +35,7 @@ exports.handle = async (req, res) => {
     // Level 0 — Main menu
     if (!text || text === '') {
       return respond(
-        'Welcome to Ruai Tech Solutions\n1. Internet Services\n2. Repair Status\n3. Pay Invoice\n4. PlayStation Booking\n5. Gov Services\n6. Support\n7. My Account\n0. Exit'
+        'Welcome to Ruai Tech Solutions\n1. Internet Services\n2. Repair Status\n3. Pay Invoice\n4. PlayStation Booking\n5. Gov Services\n6. Support\n7. My Account\n0. Exit',
       );
     }
 
@@ -43,7 +43,7 @@ exports.handle = async (req, res) => {
 
     // ── 0 Exit ──
     if (L1 === '0') {
-      try { await sendSMS(phone, 'Thank you for contacting Ruai Tech Solutions. Visit us at Ruai Town Centre!'); } catch(_){}
+      try { await sendSMS(phone, 'Thank you for contacting Ruai Tech Solutions. Visit us at Ruai Town Centre!'); } catch (_) {}
       return respond('Thank you for using Ruai Tech Solutions. Goodbye!', true);
     }
 
@@ -64,13 +64,16 @@ exports.handle = async (req, res) => {
     if (L1 === '2') {
       if (level === 1) return respond('Hardware Repair\nEnter your Job Card number (e.g. JC-001):');
       const jobNo = last.trim().toUpperCase();
-      const job   = await JobCard.findOne({ $or: [{ jobNumber: jobNo }, { clientPhone: phone }] }).sort('-createdAt');
-      if (!job)   return respond(`Job Card ${jobNo} not found.\nPlease check your receipt or visit our office.`, true);
+      const job = await JobCard.findOne({ $or: [{ jobNumber: jobNo }, { clientPhone: phone }] }).sort('-createdAt');
+      if (!job) return respond(`Job Card ${jobNo} not found.\nPlease check your receipt or visit our office.`, true);
       const STATUS_MAP = {
-        received:'Received - awaiting diagnosis', diagnosed:'Diagnosed',
-        parts_ordered:'Parts ordered', in_repair:'In Repair',
-        quality_check:'Quality Check', ready:'READY FOR COLLECTION',
-        collected:'Collected',
+        received: 'Received - awaiting diagnosis',
+        diagnosed: 'Diagnosed',
+        parts_ordered: 'Parts ordered',
+        in_repair: 'In Repair',
+        quality_check: 'Quality Check',
+        ready: 'READY FOR COLLECTION',
+        collected: 'Collected',
       };
       const statusLabel = STATUS_MAP[job.status] || job.status;
       return respond(`Job Card: ${jobNo}\nDevice: ${job.deviceType}\nFault: ${job.faultDescription}\nStatus: ${statusLabel}\nEst. Cost: KES ${job.estimatedCost || 'TBD'}`, true);
@@ -79,7 +82,7 @@ exports.handle = async (req, res) => {
     // ── 3 Pay Invoice ──
     if (L1 === '3') {
       if (level === 1) return respond('Invoice Payment\nEnter Invoice ID (e.g. RTS-PS-2026-0001):');
-      const invId   = last.trim().toUpperCase();
+      const invId = last.trim().toUpperCase();
       const invoice = await Invoice.findOne({ invoiceId: invId });
       if (!invoice) return respond(`Invoice ${invId} not found. Please check the invoice ID and try again.`, true);
       if (invoice.status === 'PAID') return respond(`Invoice ${invId} is already PAID.\nThank you!`, true);
@@ -89,7 +92,7 @@ exports.handle = async (req, res) => {
           await stkPush(phone, invoice.balance, invId, 'Ruai Tech Invoice');
           invoice.status = 'PAYMENT_SENT'; await invoice.save();
           return respond(`M-Pesa prompt sent to ${phone}.\nEnter your PIN to complete payment.\nRef: ${invId}`, true);
-        } catch(_) { return respond('Payment initiation failed. Please try again or visit our office.', true); }
+        } catch (_) { return respond('Payment initiation failed. Please try again or visit our office.', true); }
       }
       if (last === '2') return respond('Payment cancelled.', true);
     }
@@ -123,7 +126,7 @@ exports.handle = async (req, res) => {
       }
       if (last === '1') return respond('To raise a support ticket, please send an SMS to 0700000000\nwith the format: TICKET [your issue description]', true);
       if (last === '3') {
-        try { await sendSMS(phone, 'Our team will call you back within 30 minutes. Thank you for your patience - Ruai Tech Solutions'); } catch(_){}
+        try { await sendSMS(phone, 'Our team will call you back within 30 minutes. Thank you for your patience - Ruai Tech Solutions'); } catch (_) {}
         return respond('Callback request registered. We will call you within 30 minutes.', true);
       }
     }

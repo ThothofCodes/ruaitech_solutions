@@ -92,7 +92,7 @@ npm install --save-dev @babel/core@^7.29.7  # Downgrade to compatible version
 npm install --legacy-peer-deps
 ```
 
-> **Note:** The project currently has peer dependency conflicts between Babel versions (8.0.1 vs 7.x) and ESLint versions that may cause installation failures. Using `--legacy-peer-deps` flag bypasses these conflicts by ignoring the peerDependency tree and resolving the dependencies like npm v6.
+> **Note:** The project currently has peer dependency conflicts between Babel versions (8.0.1 vs 7.x) and ESLint versions that may cause installation failures. Using `--legacy-peer-deps` flag bypasses these conflicts by ignoring the peerDependency tree and resolving the dependencies like npm v6. This is the recommended approach for CI/CD environments.
 
 ---
 
@@ -186,6 +186,13 @@ This command uses `concurrently` to run:
 - Backend server on `http://localhost:5001`
 - Frontend dev server on `http://localhost:3000`
 
+> **For Public Access**: The frontend development server is configured to bind to all network interfaces (0.0.0.0:3000), making it accessible from external devices on the same network. Access the application at `http://YOUR_IP_ADDRESS:3000` where YOUR_IP_ADDRESS is your machine's IP address.
+
+> **To run the store for public access**: Use the special `dev:store` command which explicitly sets the HOST and PORT environment variables:
+> ```bash
+> npm run dev:store
+> ```
+
 ### Production Mode
 
 ```bash
@@ -204,6 +211,7 @@ npx serve -s dist
 | Role | URL | Credentials |
 |------|-----|-------------|
 | **Public** | `http://localhost:3000` | Browse freely |
+| **Public (External)** | `http://YOUR_IP_ADDRESS:3000` | Browse freely (replace YOUR_IP_ADDRESS with your machine's IP) |
 | **Super Admin** | `http://localhost:3000/admin/super` | Email: `codeofthoth@outlook.com` |
 | **Admin Portal** | `http://localhost:3000/admin` | Department-specific access |
 | **Staff Portal** | `http://localhost:3000/staff` | Company email-based access |
@@ -317,7 +325,7 @@ The project includes a comprehensive CI/CD pipeline using GitHub Actions:
 ### CI (Continuous Integration)
 - Runs on every push and pull request to `main` and `develop` branches
 - Includes:
-  - **Backend**: Linting, testing (Jest), security audits (npm audit), syntax validation, and parsing checks for server.js and seed.js
+  - **Backend**: Linting (`npm run lint`), testing (Jest), security audits (npm audit), syntax validation, and parsing checks for server.js and seed.js
   - **Frontend**: Linting (ESLint), type checking (TypeScript), component tests (Vitest), and production build validation
   - Security scanning with npm audit
   - Code coverage reports
@@ -492,9 +500,11 @@ npm install --legacy-peer-deps --prefix frontend
 
 #### Backend lint, test, audit failures
 - Run local tests before pushing: `npm test` in the backend directory
-- Check linting issues: `npm run lint` (if available)
+- Check linting issues: `npm run lint` (if available) - Note: The project now includes a lint script
 - Verify all environment variables are properly set for tests
 - Make sure all required dependencies are listed in package.json
+- **Fixed failing tests**: The presence manager test issue with admin availability detection has been resolved. The `isAnyAdminOnlineForDept` function in [socket/presence.manager.js](backend/socket/presence.manager.js) now properly considers admin availability status.
+- **Security improvements**: Added linting capabilities and improved security practices
 
 #### Frontend lint, test, build failures
 - Run local build: `npm run build` in the frontend directory
@@ -506,6 +516,7 @@ npm install --legacy-peer-deps --prefix frontend
 - Update vulnerable packages: `npm audit fix`
 - Check for high severity vulnerabilities: `npm audit --audit-level=high`
 - Review security warnings and address critical issues before merging
+- **Known vulnerabilities**: The backend has several vulnerabilities, particularly in `axios` (via africastalking), `js-yaml`, `lodash`, and `xlsx` packages. Run `npm audit` to see details.
 
 #### Vercel deployment failures
 - Verify frontend builds successfully: `npm run build` in frontend directory

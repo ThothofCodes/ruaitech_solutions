@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const jwt  = require('jsonwebtoken');
-const User = require('../models/User');
+const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const User = require('../models/User');
 
 // Sign token — algorithm explicitly pinned to HS256
-const signToken = (user) =>
-  jwt.sign(
-    {
-      id:             user._id,
-      email:          user.email,
-      role:           user.role,
-      departmentId:   user.department?._id || user.department || null,
-      departmentSlug: user.departmentSlug || null,
-      isOwner:        user.isOwner || false,
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRE || '8h',
-      algorithm: 'HS256', // explicit — prevents alg:none attack
-    }
-  );
+const signToken = (user) => jwt.sign(
+  {
+    id: user._id,
+    email: user.email,
+    role: user.role,
+    departmentId: user.department?._id || user.department || null,
+    departmentSlug: user.departmentSlug || null,
+    isOwner: user.isOwner || false,
+  },
+  process.env.JWT_SECRET,
+  {
+    expiresIn: process.env.JWT_EXPIRE || '8h',
+    algorithm: 'HS256', // explicit — prevents alg:none attack
+  },
+);
 
 // Validate email format
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -43,21 +42,21 @@ exports.verifyToken = async (req, res, next) => {
     const isTokenExpired = user.tokenExpiry && user.tokenExpiry < new Date();
 
     if (!isTokenValid || isTokenExpired) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Invalid or expired token',
-        valid: false 
+        valid: false,
       });
     }
 
-    res.json({ 
+    res.json({
       valid: true,
       message: 'Token is valid',
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (err) {
     next(err);
@@ -99,14 +98,14 @@ exports.setPassword = async (req, res, next) => {
 
     await user.save();
 
-    res.json({ 
+    res.json({
       message: 'Password set successfully',
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (err) {
     next(err);
@@ -115,7 +114,9 @@ exports.setPassword = async (req, res, next) => {
 
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password, role, department, departmentSlug, isOwner } = req.body;
+    const {
+      name, email, password, role, department, departmentSlug, isOwner,
+    } = req.body;
 
     // Input validation
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
@@ -145,7 +146,9 @@ exports.register = async (req, res, next) => {
 
     res.status(201).json({
       token: signToken(user),
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, departmentSlug: user.departmentSlug },
+      user: {
+        id: user._id, name: user.name, email: user.email, role: user.role, departmentSlug: user.departmentSlug,
+      },
     });
   } catch (err) { next(err); }
 };
@@ -188,13 +191,13 @@ exports.login = async (req, res, next) => {
     res.json({
       token: signToken(user),
       user: {
-        id:             user._id,
-        name:           user.name,
-        email:          user.email,
-        role:           user.role,
-        department:     user.department,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
         departmentSlug: user.departmentSlug,
-        isOwner:        user.isOwner,
+        isOwner: user.isOwner,
       },
     });
   } catch (err) { next(err); }

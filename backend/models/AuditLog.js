@@ -7,7 +7,7 @@ const AuditLogSchema = new mongoose.Schema({
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
   departmentSlug: String,
   action: { type: String, required: true }, // e.g. 'CREATE_JOB_CARD', 'UPDATE_TRANSACTION'
-  resource: String,   // e.g. 'JobCard', 'DeptTransaction'
+  resource: String, // e.g. 'JobCard', 'DeptTransaction'
   resourceId: String,
   details: mongoose.Schema.Types.Mixed,
   ip: String,

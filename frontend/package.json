@@ -13,7 +13,7 @@
     "test:smoke": "node ../__simulation__.js",
     "test:ui": "vitest --ui",
     "build:debug": "VITE_DEBUG=true vite build",
-    "vercel-build": "npm run build"  // Add this script for Vercel
+    "vercel-build": "npm run build"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -3,7 +3,9 @@ const router = require('express').Router();
 const {
   getOrders, getOrder, getOrdersByPhone, createOrder, updateOrderStatus, recordOrderPayment,
 } = require('../controllers/orderController');
-const { protect, staffGuard, deptHeadGuard, staffReadScope } = require('../middleware/auth');
+const {
+  protect, staffGuard, deptHeadGuard, staffReadScope,
+} = require('../middleware/auth');
 
 // Public — customer order tracking
 router.get('/my/:phone', getOrdersByPhone);
@@ -12,7 +14,7 @@ router.get('/my/:phone', getOrdersByPhone);
 router.post('/', createOrder);
 
 // STAFF can view orders and verify/record payments (transaction verification)
-router.get('/',    protect, staffGuard, staffReadScope, getOrders);
+router.get('/', protect, staffGuard, staffReadScope, getOrders);
 router.get('/:id', protect, staffGuard, staffReadScope, getOrder);
 router.put('/:id/payment', protect, staffGuard, staffReadScope, recordOrderPayment);
 

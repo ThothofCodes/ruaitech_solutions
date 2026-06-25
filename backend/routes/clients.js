@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const router = require('express').Router();
-const { getClients, getClient, createClient, updateClient, deleteClient } = require('../controllers/clientController');
+const {
+  getClients, getClient, createClient, updateClient, deleteClient,
+} = require('../controllers/clientController');
 const { protect, staff } = require('../middleware/auth');
 
 router.use(protect, staff);

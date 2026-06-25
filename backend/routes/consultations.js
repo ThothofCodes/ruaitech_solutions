@@ -6,7 +6,9 @@ const {
   cancelConsultation, getStats,
 } = require('../controllers/consultationController');
 const AvailabilitySlot = require('../models/AvailabilitySlot');
-const { protect, staffGuard, deptHeadGuard, superAdminGuard, staffReadScope } = require('../middleware/auth');
+const {
+  protect, staffGuard, deptHeadGuard, superAdminGuard, staffReadScope,
+} = require('../middleware/auth');
 
 // Public
 router.get('/types', getTypes);
@@ -23,12 +25,12 @@ router.post('/availability', protect, superAdminGuard, async (req, res, next) =>
 router.get('/stats', protect, superAdminGuard, getStats);
 
 // STAFF can view consultation requests (service requests)
-router.get('/',    protect, staffGuard, staffReadScope, getConsultations);
+router.get('/', protect, staffGuard, staffReadScope, getConsultations);
 router.get('/:id', protect, staffGuard, staffReadScope, getConsultation);
 
 // Only dept heads and above can confirm, complete, or cancel
-router.put('/:id/confirm',   protect, deptHeadGuard, confirmConsultation);
-router.put('/:id/complete',  protect, deptHeadGuard, completeConsultation);
-router.put('/:id/cancel',    protect, deptHeadGuard, cancelConsultation);
+router.put('/:id/confirm', protect, deptHeadGuard, confirmConsultation);
+router.put('/:id/complete', protect, deptHeadGuard, completeConsultation);
+router.put('/:id/cancel', protect, deptHeadGuard, cancelConsultation);
 
 module.exports = router;

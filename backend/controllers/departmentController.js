@@ -31,7 +31,7 @@ exports.updateDepartment = async (req, res, next) => {
     const dept = await Department.findOneAndUpdate(
       { slug: req.params.slug },
       req.body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
     if (!dept) return res.status(404).json({ message: 'Department not found' });
     res.json(dept);

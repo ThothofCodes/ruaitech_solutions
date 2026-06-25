@@ -13,9 +13,9 @@ describe('isAdminRole — real role-enum check (not substring matching)', () => 
   test('recognizes every role that should be able to answer chat', () => {
     expect(isAdminRole('SUPER_ADMIN')).toBe(true);
     expect(isAdminRole('DEPT_HEAD_OWNER')).toBe(true); // previously false — the actual bug
-    expect(isAdminRole('STAFF')).toBe(true);            // previously false — the actual bug
-    expect(isAdminRole('admin')).toBe(true);             // legacy role, still supported
-    expect(isAdminRole('staff')).toBe(true);             // legacy role, still supported
+    expect(isAdminRole('STAFF')).toBe(true); // previously false — the actual bug
+    expect(isAdminRole('admin')).toBe(true); // legacy role, still supported
+    expect(isAdminRole('staff')).toBe(true); // legacy role, still supported
   });
 
   test('rejects roles that should never be treated as admin-capable', () => {

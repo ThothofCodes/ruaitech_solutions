@@ -74,10 +74,14 @@ async function fetchSources(startDate, endDate, deptFilter) {
     status: { $in: ['confirmed', 'completed'] },
   });
 
-  return { revenueEntries, orders, bookings, consultations };
+  return {
+    revenueEntries, orders, bookings, consultations,
+  };
 }
 
-function groupByDate(range, year, { revenueEntries, orders, bookings, consultations }) {
+function groupByDate(range, year, {
+  revenueEntries, orders, bookings, consultations,
+}) {
   // Helper: each source contributes (amount, dateField) pairs
   const contributions = [
     ...revenueEntries.map((e) => ({ date: e.date, amount: e.amount })),
@@ -127,14 +131,14 @@ exports.getRevenueStats = async (req, res, next) => {
     const [startDate, endDate] = getDateRange(range, year);
     const deptFilter = scopeFilter(req);
 
-    const { revenueEntries, orders, bookings, consultations } =
-      await fetchSources(startDate, endDate, deptFilter);
+    const {
+      revenueEntries, orders, bookings, consultations,
+    } = await fetchSources(startDate, endDate, deptFilter);
 
-    const totalRevenue =
-      revenueEntries.reduce((sum, e) => sum + e.amount, 0) +
-      orders.reduce((sum, o) => sum + o.total, 0) +
-      bookings.reduce((sum, b) => sum + b.amountCharged, 0) + // FIX: was b.total
-      consultations.reduce((sum, c) => sum + c.fee, 0);
+    const totalRevenue = revenueEntries.reduce((sum, e) => sum + e.amount, 0)
+      + orders.reduce((sum, o) => sum + o.total, 0)
+      + bookings.reduce((sum, b) => sum + b.amountCharged, 0) // FIX: was b.total
+      + consultations.reduce((sum, c) => sum + c.fee, 0);
 
     const totalOrders = orders.length + bookings.length + consultations.length;
 
@@ -154,7 +158,9 @@ exports.getRevenueStats = async (req, res, next) => {
 
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    const groupedRevenue = groupByDate(range, year, { revenueEntries, orders, bookings, consultations });
+    const groupedRevenue = groupByDate(range, year, {
+      revenueEntries, orders, bookings, consultations,
+    });
 
     const ordersByStatus = await Order.aggregate([
       { $match: { ...deptFilter, createdAt: { $gte: startDate, $lte: endDate } } },
@@ -181,7 +187,7 @@ exports.getRevenueStats = async (req, res, next) => {
         revenueData: groupedRevenue,
         ordersByStatus: Object.fromEntries(ordersByStatus.map((i) => [i._id, i.count])),
         salesByPaymentMethod: Object.fromEntries(
-          salesByPaymentMethod.map((i) => [i._id || 'unspecified', { count: i.count, revenue: i.totalRevenue }])
+          salesByPaymentMethod.map((i) => [i._id || 'unspecified', { count: i.count, revenue: i.totalRevenue }]),
         ),
       },
     });
@@ -198,10 +204,13 @@ exports.getRevenueChartData = async (req, res, next) => {
     const [startDate, endDate] = getDateRange(range, year);
     const deptFilter = scopeFilter(req);
 
-    const { revenueEntries, orders, bookings, consultations } =
-      await fetchSources(startDate, endDate, deptFilter);
+    const {
+      revenueEntries, orders, bookings, consultations,
+    } = await fetchSources(startDate, endDate, deptFilter);
 
-    const groupedRevenue = groupByDate(range, year, { revenueEntries, orders, bookings, consultations });
+    const groupedRevenue = groupByDate(range, year, {
+      revenueEntries, orders, bookings, consultations,
+    });
 
     res.json({ success: true, data: groupedRevenue });
   } catch (error) {

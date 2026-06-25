@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
 const router = require('express').Router();
-const { getUsers, createUser, updateUser, resetPassword, deactivateUser } = require('../controllers/userController');
+const {
+  getUsers, createUser, updateUser, resetPassword, deactivateUser,
+} = require('../controllers/userController');
 const { protect, superAdminGuard, staffManagerGuard } = require('../middleware/auth');
 
 // All routes require authentication + staff manager permission

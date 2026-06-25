@@ -9,11 +9,11 @@ const chatController = {
   createCallbackRequest: async (req, res) => {
     try {
       const { clientName, message, phone } = req.body;
-      
+
       if (!clientName || !message) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Client name and message are required' 
+        return res.status(400).json({
+          success: false,
+          error: 'Client name and message are required',
         });
       }
 
@@ -21,7 +21,7 @@ const chatController = {
         clientName,
         message,
         phone,
-        status: 'pending'
+        status: 'pending',
       });
 
       await callbackRequest.save();
@@ -33,18 +33,18 @@ const chatController = {
         clientName,
         message,
         phone,
-        createdAt: callbackRequest.createdAt
+        createdAt: callbackRequest.createdAt,
       });
 
       res.status(201).json({
         success: true,
-        data: callbackRequest
+        data: callbackRequest,
       });
     } catch (error) {
       console.error('Error creating callback request:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to create callback request'
+        error: 'Failed to create callback request',
       });
     }
   },
@@ -59,8 +59,8 @@ const chatController = {
       const conversations = await ChatMessage.aggregate([
         {
           $match: {
-            createdAt: { $gte: thirtyDaysAgo }
-          }
+            createdAt: { $gte: thirtyDaysAgo },
+          },
         },
         {
           $group: {
@@ -74,36 +74,36 @@ const chatController = {
                 $cond: [
                   { $eq: ['$read', false] },
                   1,
-                  0
-                ]
-              }
-            }
-          }
+                  0,
+                ],
+              },
+            },
+          },
         },
         {
-          $sort: { timestamp: -1 }
-        }
+          $sort: { timestamp: -1 },
+        },
       ]);
 
       // Format the conversation IDs consistently
-      const formattedConversations = conversations.map(conv => ({
+      const formattedConversations = conversations.map((conv) => ({
         conversationId: conv._id,
         guestId: conv.guestId,
         lastMessage: conv.lastMessage,
         timestamp: conv.timestamp,
         messageCount: conv.messageCount,
-        unreadCount: conv.unreadCount
+        unreadCount: conv.unreadCount,
       }));
 
       res.json({
         success: true,
-        data: formattedConversations
+        data: formattedConversations,
       });
     } catch (error) {
       console.error('Error getting conversations:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get conversations'
+        error: 'Failed to get conversations',
       });
     }
   },
@@ -112,7 +112,7 @@ const chatController = {
   getConversation: async (req, res) => {
     try {
       const { conversationId } = req.params;
-      
+
       // Handle both formats: 'conversation-guest-xxx' and 'guest-xxx'
       let searchId = conversationId;
       if (!conversationId.startsWith('conversation-')) {
@@ -123,19 +123,19 @@ const chatController = {
         }
       }
 
-      const messages = await ChatMessage.find({ 
-        conversationId: searchId
+      const messages = await ChatMessage.find({
+        conversationId: searchId,
       }).sort({ createdAt: 1 });
 
       res.json({
         success: true,
-        data: messages
+        data: messages,
       });
     } catch (error) {
       console.error('Error getting conversation:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get conversation'
+        error: 'Failed to get conversation',
       });
     }
   },
@@ -144,7 +144,7 @@ const chatController = {
   markAsRead: async (req, res) => {
     try {
       const { conversationId } = req.params;
-      
+
       // Handle both formats: 'conversation-guest-xxx' and 'guest-xxx'
       let searchId = conversationId;
       if (!conversationId.startsWith('conversation-')) {
@@ -157,18 +157,18 @@ const chatController = {
 
       await ChatMessage.updateMany(
         { conversationId: searchId },
-        { read: true, readAt: new Date() }
+        { read: true, readAt: new Date() },
       );
 
       res.json({
         success: true,
-        message: 'Conversation marked as read'
+        message: 'Conversation marked as read',
       });
     } catch (error) {
       console.error('Error marking conversation as read:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to mark conversation as read'
+        error: 'Failed to mark conversation as read',
       });
     }
   },
@@ -177,7 +177,7 @@ const chatController = {
   getCallbackRequests: async (req, res) => {
     try {
       const { status } = req.query;
-      
+
       const filter = {};
       if (status) {
         filter.status = status;
@@ -188,13 +188,13 @@ const chatController = {
 
       res.json({
         success: true,
-        data: callbackRequests
+        data: callbackRequests,
       });
     } catch (error) {
       console.error('Error getting callback requests:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get callback requests'
+        error: 'Failed to get callback requests',
       });
     }
   },
@@ -212,25 +212,25 @@ const chatController = {
       const callbackRequest = await CallbackRequest.findByIdAndUpdate(
         id,
         updateData,
-        { new: true }
+        { new: true },
       );
 
       if (!callbackRequest) {
         return res.status(404).json({
           success: false,
-          error: 'Callback request not found'
+          error: 'Callback request not found',
         });
       }
 
       res.json({
         success: true,
-        data: callbackRequest
+        data: callbackRequest,
       });
     } catch (error) {
       console.error('Error updating callback request:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to update callback request'
+        error: 'Failed to update callback request',
       });
     }
   },
@@ -239,24 +239,24 @@ const chatController = {
   getAdminStatus: async (req, res) => {
     try {
       const userId = req.user.id;
-      
+
       // Get the specific admin's availability setting
       const adminAvailability = presenceManager.getAdminAvailability(userId);
-      
+
       // Get overall system admin online status
       const systemAdminOnline = presenceManager.isAnyAdminOnline();
-      
+
       res.json({
         success: true,
         status: adminAvailability, // This admin's willingness to receive chats
         adminOnline: systemAdminOnline, // Overall system availability
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error getting admin status:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get admin status'
+        error: 'Failed to get admin status',
       });
     }
   },
@@ -266,39 +266,38 @@ const chatController = {
     try {
       const { status } = req.body;
       const userId = req.user.id;
-      
+
       if (typeof status !== 'boolean') {
         return res.status(400).json({
           success: false,
-          error: 'Status must be a boolean value'
+          error: 'Status must be a boolean value',
         });
       }
 
       // Update this admin's availability preference
       presenceManager.setAdminAvailability(userId, status);
-      
+
       // Broadcast the updated admin status to all visitors
       const io = getIO();
       io.to('public-chat').emit('admin:status', { online: presenceManager.isAnyAdminOnline() });
 
       res.json({
         success: true,
-        message: status 
-          ? 'You are now available to receive customer chats' 
+        message: status
+          ? 'You are now available to receive customer chats'
           : 'You are no longer available to receive customer chats',
-        status: status,
-        timestamp: new Date().toISOString()
+        status,
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error updating admin status:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to update admin status'
+        error: 'Failed to update admin status',
       });
     }
-  }
+  },
 
 };
-
 
 module.exports = chatController;

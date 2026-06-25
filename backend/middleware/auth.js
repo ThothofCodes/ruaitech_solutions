@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Thoth of Codes. Licensed under the MIT License.
-const jwt     = require('jsonwebtoken');
-const User    = require('../models/User');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 
 // Fields to strip from audit log body (never log passwords or tokens)
@@ -27,8 +27,8 @@ exports.protect = async (req, res, next) => {
     }
 
     const user = await User.findById(decoded.id).populate('department', 'name slug');
-    if (!user)            return res.status(401).json({ message: 'User no longer exists' });
-    if (!user.isActive)   return res.status(401).json({ message: 'Account deactivated' });
+    if (!user) return res.status(401).json({ message: 'User no longer exists' });
+    if (!user.isActive) return res.status(401).json({ message: 'Account deactivated' });
 
     // Verify token email matches DB email (prevents stale tokens after email change)
     if (user.email !== decoded.email) {
@@ -114,16 +114,16 @@ exports.authorize = (...roles) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Access denied. No user authenticated.' });
     }
-    
+
     const userRole = req.user.role;
-    
+
     // Flatten roles array in case it's passed as nested arrays
     const allowedRoles = roles.flat();
-    
+
     if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
-    
+
     next();
   };
 };
@@ -138,17 +138,17 @@ exports.auditLog = (action, resource) => async (req, res, next) => {
     if (res.statusCode < 400) {
       try {
         await AuditLog.create({
-          user:            req.user?._id,
-          userEmail:       req.user?.email,
-          department:      req.user?.department?._id || req.user?.department,
-          departmentSlug:  req.user?.departmentSlug,
+          user: req.user?._id,
+          userEmail: req.user?.email,
+          department: req.user?.department?._id || req.user?.department,
+          departmentSlug: req.user?.departmentSlug,
           action,
           resource,
-          resourceId:      req.params?.id,
+          resourceId: req.params?.id,
           details: {
             method: req.method,
-            path:   req.path,
-            body:   sanitizeBody(req.body), // never log passwords/tokens
+            path: req.path,
+            body: sanitizeBody(req.body), // never log passwords/tokens
           },
           ip: req.ip,
         });
